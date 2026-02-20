@@ -16,10 +16,12 @@ jobs:
         submodules: recursive
 
     - name: Setup Vulkan SDK
-      uses: humbletim/install-vulkan-sdk@v1.2
-      with:
-        version: 1.4.341.1
-        cache: true
+      shell: powershell
+      run: |
+        Invoke-WebRequest -Uri "https://sdk.lunarg.com/sdk/download/1.4.341.1/windows/VulkanSDK-1.4.341.1-Installer.exe" -OutFile "vulkan.exe"
+        Start-Process -Wait -NoNewWindow -FilePath ".\vulkan.exe" -ArgumentList "--root", "C:\VulkanSDK", "--accept-licenses", "--default-answer", "--confirm-command", "install"
+        "VULKAN_SDK=C:\VulkanSDK" >> $env:GITHUB_ENV
+        "C:\VulkanSDK\Bin" >> $env:GITHUB_PATH
 
     - name: Configure CMake
       run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DVULKAN_SDK=$env:VULKAN_SDK
