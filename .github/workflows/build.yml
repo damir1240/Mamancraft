@@ -31,7 +31,8 @@ jobs:
     - name: Build
       run: cmake --build build --config Release
 
-    - name: Run Dependency Test
+    - name: Run Tests
       run: |
         cd build/Release
         .\TestDeps.exe
+        .\TestEngine.exe
