@@ -21,7 +21,7 @@ class VulkanDevice {
 public:
   VulkanDevice(VkPhysicalDevice physicalDevice, VkDevice logicalDevice,
                const QueueFamilyIndices &indices);
-  ~VulkanDevice() = default;
+  ~VulkanDevice();
 
   VkPhysicalDevice GetPhysicalDevice() const { return m_PhysicalDevice; }
   VkDevice GetLogicalDevice() const { return m_LogicalDevice; }

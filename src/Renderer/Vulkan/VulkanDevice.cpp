@@ -16,4 +16,10 @@ VulkanDevice::VulkanDevice(VkPhysicalDevice physicalDevice,
                    &m_ComputeQueue);
 }
 
+VulkanDevice::~VulkanDevice() {
+  if (m_LogicalDevice != VK_NULL_HANDLE) {
+    vkDestroyDevice(m_LogicalDevice, nullptr);
+  }
+}
+
 } // namespace mc
