@@ -1,0 +1,53 @@
+DISCLAIMER: This English translation is provided for convenience only. The original legally binding document is in Russian, located in the LICENSE.txt file. In the event of any discrepancies, the Russian version shall prevail.
+
+MAMANCRAFT END USER LICENSE AGREEMENT (EULA) AND SOURCE-AVAILABLE LICENSE
+
+Author and Copyright Holder: damir1240
+Year of Publication: 2026
+
+CAREFULLY READ THIS AGREEMENT BEFORE USING THE SOFTWARE.
+
+This End User License Agreement (hereinafter referred to as the "Agreement") is a legal document concluded between you (an individual or a legal entity) and the Copyright Holder (damir1240) regarding the video game "Mamancraft", including its source code, media files, materials, and any related components (hereinafter referred to as the "Software").
+
+By downloading, installing, copying, or otherwise using the Software, you express your full and unconditional agreement to the terms of this Agreement.
+
+1. ACKNOWLEDGMENT OF COPYRIGHT AND ARTIFICIAL INTELLIGENCE
+The Software was created using artificial intelligence technologies (AI-assisted), wherein the Copyright Holder (damir1240) acted as the system architect, lead developer, and neural network operator, performing the selection, compilation, and final organization of the product. All intellectual property rights to the Software, including the concept, logic, source code, and creative contribution, belong to the Copyright Holder to the maximum extent permitted by applicable law.
+
+2. GRANT OF LICENSE
+Subject to your strict compliance with the terms of this Agreement, the Copyright Holder grants you a personal, non-exclusive, non-transferable, revocable, and limited license to perform the following actions for non-commercial purposes (except as expressly provided in Section 5):
+a. Reproduction and Use: You have the right to download, install, and run the compiled version of the Software on your personal device free of charge. The compiled version will always be provided free of charge in the official repository.
+b. Access to Source Code: You have the right to download the source code of the Software to your personal device solely for the purposes of familiarization, local execution, and studying the project architecture.
+c. Information Distribution: The Copyright Holder encourages sharing links to the official Software repository, official pages, and project-related materials.
+
+3. MODIFICATION POLICY (MODDING)
+The Copyright Holder supports the creation of user-generated content subject to the following strict conditions:
+a. The creation of modifications (hereinafter referred to as "Mods") is permitted EXCLUSIVELY using the official software or toolset (API) provided by the Copyright Holder specifically for these purposes.
+b. Distribution of created Mods is permitted only through official sources, platforms, or repositories explicitly approved by the Copyright Holder.
+
+4. RESTRICTIONS AND PROHIBITIONS
+Except as expressly permitted in Sections 3 and 5 of this Agreement, you are STRICTLY PROHIBITED from:
+a. Alteration of Source Code: Any direct modification of the Software's base source code. It is prohibited to rewrite, delete, or add any code to the original project files.
+b. Use of Third-Party Software: Interfering with the operation of the Software using unauthorized third-party software, including but not limited to: cheats, trainers, injectors, third-party mod loaders, or memory editors.
+c. Decompilation and Reverse Engineering: Decompiling, disassembling, or attempting to extract the source code from compiled versions of the Software, unless otherwise provided by applicable law.
+d. Commercial Use: Selling, renting, licensing, or otherwise deriving commercial benefit from the Software or its parts.
+e. Attribution: Distributing the Software (or modified versions thereof) under your own name or claiming rights to this product.
+
+5. VIDEO CONTENT CREATION AND STREAMING
+The Copyright Holder explicitly permits the creation, public display, and monetization of video clips, reviews, let's plays, and live broadcasts (streams) using the Software on video hosting platforms.
+
+6. DISCLAIMER OF WARRANTIES AND LIMITATION OF LIABILITY
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT OF THIRD-PARTY RIGHTS.
+IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS), HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, ARISING IN ANY WAY OUT OF THE USE OF OR INABILITY TO USE THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+7. TERMINATION OF LICENSE
+This license is effective until terminated. In the event of your breach of any of the terms of this Agreement, the rights granted to you will terminate automatically and immediately without prior notice from the Copyright Holder. In such a case, you must cease all use of the Software and delete all of its copies from your devices.
+
+8. AMENDMENTS TO THE AGREEMENT
+The Copyright Holder reserves the right to unilaterally make amendments to this Agreement at any time. The updated version of the Agreement takes effect immediately upon its publication in the official Software repository. It is your responsibility to periodically check this Agreement for changes. Your continued use of the Software following the posting of changes will mean that you accept and agree to the updated terms.
+
+9. GOVERNING LAW AND JURISDICTION
+This Agreement shall be governed by and construed in accordance with the laws of the Russian Federation. All disputes, controversies, or claims arising out of or in connection with this Agreement shall be subject to resolution in the appropriate courts of the Russian Federation at the location of the Copyright Holder.
+
+10. PREVAILING LANGUAGE
+This Agreement is drawn up in the Russian language. Translation into English or any other languages is provided solely for the convenience of the users. In the event of any discrepancies, conflicts, or inaccuracies in translation between the Russian version and the version in any other language, the original version in the Russian language shall prevail and hold full legal force.
