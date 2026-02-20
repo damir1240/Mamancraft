@@ -16,9 +16,8 @@ add_subdirectory(external/spdlog EXCLUDE_FROM_ALL)
 add_library(glm INTERFACE)
 target_include_directories(glm INTERFACE external/glm)
 
-# VMA is header-only
-add_library(vma INTERFACE)
-target_include_directories(vma INTERFACE external/vma/include)
+# VMA Submodule
+add_subdirectory(external/vma EXCLUDE_FROM_ALL)
 
 # Main Executable
 file(GLOB_RECURSE MAMANCRAFT_SRCS "src/*.cpp")
@@ -32,7 +31,7 @@ target_link_libraries(Mamancraft PRIVATE
     SDL3::SDL3
     spdlog::spdlog
     glm
-    vma
+    GPUOpen::VulkanMemoryAllocator
 )
 
 # Test Executable
@@ -42,7 +41,7 @@ target_link_libraries(TestDeps PRIVATE
     SDL3::SDL3 
     spdlog::spdlog
     glm
-    vma
+    GPUOpen::VulkanMemoryAllocator
 )
 
 # Auto-copy SDL3.dll to the output directories
