@@ -1,33 +1,25 @@
-#include <iostream>
-#include <vulkan/vulkan.h>
-#include <SDL3/SDL.h>
-#include <glm/glm.hpp>
-#include <spdlog/spdlog.h>
+#include "Mamancraft/Core/Application.hpp"
+#include "Mamancraft/Core/Logger.hpp"
 
-int main(int argc, char* argv[]) {
-    spdlog::info("Starting Mamancraft Engine...");
-    
-    // Minimal SDL3 Init
-    if (!SDL_Init(SDL_INIT_VIDEO)) {
-        spdlog::error("SDL_Init Error: {}", SDL_GetError());
-        return -1;
-    }
-    spdlog::info("SDL3 initialized successfully.");
+#include <exception>
 
-    // Minimal Vulkan Version Check
-    uint32_t apiVersion;
-    if (vkEnumerateInstanceVersion(&apiVersion) == VK_SUCCESS) {
-        spdlog::info("Vulkan Instance Version: {}.{}.{}", 
-            VK_API_VERSION_MAJOR(apiVersion),
-            VK_API_VERSION_MINOR(apiVersion),
-            VK_API_VERSION_PATCH(apiVersion));
-    }
+int main(int argc, char *argv[]) {
+  mc::Logger::Init();
+  MC_INFO("Mamancraft Engine starting...");
 
-    // Minimal GLM check
-    glm::vec3 testVec(1.0f, 2.0f, 3.0f);
-    spdlog::info("GLM Test Vector: ({}, {}, {})", testVec.x, testVec.y, testVec.z);
+  try {
+    mc::AppConfig config;
+    config.title = "Mamancraft Voxel Engine";
+    config.width = 1280;
+    config.height = 720;
 
-    SDL_Quit();
-    spdlog::info("Mamancraft Engine shut down.");
-    return 0;
+    mc::Application app(config);
+    app.Run();
+  } catch (const std::exception &e) {
+    MC_CRITICAL("Fatal Error: {0}", e.what());
+    return -1;
+  }
+
+  MC_INFO("Mamancraft Engine shutdown gracefully.");
+  return 0;
 }

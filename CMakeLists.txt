@@ -17,7 +17,11 @@ add_library(glm INTERFACE)
 target_include_directories(glm INTERFACE external/glm)
 
 # Main Executable
-add_executable(Mamancraft src/main.cpp)
+include_directories(include)
+file(GLOB_RECURSE MAMANCRAFT_SRCS "src/*.cpp")
+# Exclude TestDeps if it matches above glob (though it is in tests/ directory, so it won't match)
+# Assuming Tests are in `tests/` based on TestDeps path.
+add_executable(Mamancraft ${MAMANCRAFT_SRCS})
 target_link_libraries(Mamancraft PRIVATE 
     Vulkan::Vulkan 
     SDL3::SDL3 
