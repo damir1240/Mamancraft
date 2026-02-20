@@ -7,7 +7,6 @@
 #include <set>
 #include <stdexcept>
 
-
 namespace mc {
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL
@@ -62,11 +61,13 @@ void VulkanContext::Init() {
   CreateSurface();
   PickPhysicalDevice();
   CreateLogicalDevice();
+  CreateSwapchain();
 }
 
 void VulkanContext::Shutdown() {
   MC_INFO("Shutting down Vulkan Context");
 
+  m_Swapchain.reset();
   m_Device.reset();
 
   if (m_Surface != VK_NULL_HANDLE) {
@@ -263,10 +264,17 @@ void VulkanContext::PickPhysicalDevice() {
             deviceProperties.deviceName);
 
     QueueFamilyIndices indices = FindQueueFamilies(device);
+    bool extensionsSupported = CheckDeviceExtensionSupport(device);
 
-    // TODO: Later add check for extension support (VK_KHR_swapchain) and
-    // swapchain details (formats, present modes)
-    if (indices.isComplete()) {
+    bool swapChainAdequate = false;
+    if (extensionsSupported) {
+      SwapchainSupportDetails swapChainSupport =
+          VulkanSwapchain::QuerySwapchainSupport(device, m_Surface);
+      swapChainAdequate = !swapChainSupport.formats.empty() &&
+                          !swapChainSupport.presentModes.empty();
+    }
+
+    if (indices.isComplete() && extensionsSupported && swapChainAdequate) {
       m_PhysicalDevice = device;
       break;
     }
@@ -309,8 +317,9 @@ void VulkanContext::CreateLogicalDevice() {
   createInfo.pQueueCreateInfos = queueCreateInfos.data();
 
   createInfo.pEnabledFeatures = &deviceFeatures;
-  // TODO: Add device extensions (like VK_KHR_swapchain) here
-  createInfo.enabledExtensionCount = 0;
+  createInfo.enabledExtensionCount =
+      static_cast<uint32_t>(m_DeviceExtensions.size());
+  createInfo.ppEnabledExtensionNames = m_DeviceExtensions.data();
 
   if (m_EnableValidationLayers) {
     createInfo.enabledLayerCount =
@@ -331,6 +340,30 @@ void VulkanContext::CreateLogicalDevice() {
       std::make_unique<VulkanDevice>(m_PhysicalDevice, logicalDevice, indices);
 
   MC_INFO("Vulkan Logical Device and Queues created successfully.");
+}
+
+bool VulkanContext::CheckDeviceExtensionSupport(VkPhysicalDevice device) {
+  uint32_t extensionCount;
+  vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount,
+                                       nullptr);
+
+  std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+  vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount,
+                                       availableExtensions.data());
+
+  std::set<std::string> requiredExtensions(m_DeviceExtensions.begin(),
+                                           m_DeviceExtensions.end());
+
+  for (const auto &extension : availableExtensions) {
+    requiredExtensions.erase(extension.extensionName);
+  }
+
+  return requiredExtensions.empty();
+}
+
+void VulkanContext::CreateSwapchain() {
+  m_Swapchain = std::make_unique<VulkanSwapchain>(m_Device, m_Instance,
+                                                  m_Surface, m_Window);
 }
 
 } // namespace mc

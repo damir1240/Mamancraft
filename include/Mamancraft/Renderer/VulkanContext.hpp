@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Mamancraft/Renderer/Vulkan/VulkanDevice.hpp"
+#include "Mamancraft/Renderer/Vulkan/VulkanSwapchain.hpp"
 #include <SDL3/SDL.h>
 #include <memory>
 #include <vector>
@@ -19,6 +20,9 @@ public:
   VkInstance GetInstance() const { return m_Instance; }
   VkSurfaceKHR GetSurface() const { return m_Surface; }
   const std::unique_ptr<VulkanDevice> &GetDevice() const { return m_Device; }
+  const std::unique_ptr<VulkanSwapchain> &GetSwapchain() const {
+    return m_Swapchain;
+  }
 
 private:
   void Init();
@@ -29,7 +33,9 @@ private:
   void CreateSurface();
   void PickPhysicalDevice();
   QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
+  bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
   void CreateLogicalDevice();
+  void CreateSwapchain();
 
   bool CheckValidationLayerSupport();
   std::vector<const char *> GetRequiredExtensions();
@@ -43,6 +49,10 @@ private:
   VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
 
   std::unique_ptr<VulkanDevice> m_Device;
+  std::unique_ptr<VulkanSwapchain> m_Swapchain;
+
+  const std::vector<const char *> m_DeviceExtensions = {
+      VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
 #ifdef NDEBUG
   const bool m_EnableValidationLayers = false;
