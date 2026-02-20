@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Mamancraft/Renderer/Vulkan/VulkanAllocator.hpp"
+#include "Mamancraft/Renderer/Vulkan/VulkanCommandPool.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanDevice.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanSwapchain.hpp"
 #include <SDL3/SDL.h>
@@ -23,6 +25,12 @@ public:
   const std::unique_ptr<VulkanSwapchain> &GetSwapchain() const {
     return m_Swapchain;
   }
+  const std::unique_ptr<VulkanAllocator> &GetAllocator() const {
+    return m_Allocator;
+  }
+  const std::unique_ptr<VulkanCommandPool> &GetCommandPool() const {
+    return m_CommandPool;
+  }
 
 private:
   void Init();
@@ -36,6 +44,8 @@ private:
   bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
   void CreateLogicalDevice();
   void CreateSwapchain();
+  void CreateAllocator();
+  void CreateCommandPool();
 
   bool CheckValidationLayerSupport();
   std::vector<const char *> GetRequiredExtensions();
@@ -50,6 +60,8 @@ private:
 
   std::unique_ptr<VulkanDevice> m_Device;
   std::unique_ptr<VulkanSwapchain> m_Swapchain;
+  std::unique_ptr<VulkanAllocator> m_Allocator;
+  std::unique_ptr<VulkanCommandPool> m_CommandPool;
 
   const std::vector<const char *> m_DeviceExtensions = {
       VK_KHR_SWAPCHAIN_EXTENSION_NAME};

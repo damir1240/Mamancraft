@@ -62,11 +62,15 @@ void VulkanContext::Init() {
   PickPhysicalDevice();
   CreateLogicalDevice();
   CreateSwapchain();
+  CreateAllocator();
+  CreateCommandPool();
 }
 
 void VulkanContext::Shutdown() {
   MC_INFO("Shutting down Vulkan Context");
 
+  m_CommandPool.reset();
+  m_Allocator.reset();
   m_Swapchain.reset();
   m_Device.reset();
 
@@ -364,6 +368,18 @@ bool VulkanContext::CheckDeviceExtensionSupport(VkPhysicalDevice device) {
 void VulkanContext::CreateSwapchain() {
   m_Swapchain = std::make_unique<VulkanSwapchain>(m_Device, m_Instance,
                                                   m_Surface, m_Window);
+}
+
+void VulkanContext::CreateAllocator() {
+  m_Allocator = std::make_unique<VulkanAllocator>(m_Instance, m_Device);
+}
+
+void VulkanContext::CreateCommandPool() {
+  uint32_t graphicsQueueFamily =
+      m_Device->GetQueueFamilyIndices().graphicsFamily.value();
+  m_CommandPool = std::make_unique<VulkanCommandPool>(
+      m_Device, graphicsQueueFamily,
+      VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 }
 
 } // namespace mc

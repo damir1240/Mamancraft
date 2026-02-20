@@ -16,6 +16,10 @@ add_subdirectory(external/spdlog EXCLUDE_FROM_ALL)
 add_library(glm INTERFACE)
 target_include_directories(glm INTERFACE external/glm)
 
+# VMA is header-only
+add_library(vma INTERFACE)
+target_include_directories(vma INTERFACE external/vma/include)
+
 # Main Executable
 file(GLOB_RECURSE MAMANCRAFT_SRCS "src/*.cpp")
 add_executable(Mamancraft ${MAMANCRAFT_SRCS})
@@ -28,6 +32,7 @@ target_link_libraries(Mamancraft PRIVATE
     SDL3::SDL3
     spdlog::spdlog
     glm
+    vma
 )
 
 # Test Executable
@@ -37,6 +42,7 @@ target_link_libraries(TestDeps PRIVATE
     SDL3::SDL3 
     spdlog::spdlog
     glm
+    vma
 )
 
 # Auto-copy SDL3.dll to the output directories
