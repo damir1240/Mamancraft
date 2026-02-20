@@ -1,0 +1,32 @@
+name: C++ Build and Test
+
+on:
+  push:
+    branches: [ main, dev, 'feature/**' ]
+  pull_request:
+    branches: [ main, dev ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install Vulkan SDK
+      run: |
+        curl -L -o VulkanSDK-Installer.exe https://sdk.lunarg.com/sdk/download/latest/windows/vulkan_sdk.exe
+        .\VulkanSDK-Installer.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
+        echo "VULKAN_SDK=C:\VulkanSDK" >> $GITHUB_ENV
+        echo "C:\VulkanSDK\Bin" >> $GITHUB_PATH
+
+    - name: Configure CMake
+      run: cmake -B build -S . -DVULKAN_SDK=C:\VulkanSDK
+
+    - name: Build
+      run: cmake --build build --config Release
+
+    - name: Run Dependency Test
+      run: .\build\Release\TestDeps.exe
