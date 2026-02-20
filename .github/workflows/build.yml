@@ -15,18 +15,19 @@ jobs:
       with:
         submodules: recursive
 
-    - name: Install Vulkan SDK
-      run: |
-        curl -L -o VulkanSDK-Installer.exe https://sdk.lunarg.com/sdk/download/latest/windows/vulkan_sdk.exe
-        .\VulkanSDK-Installer.exe --root C:\VulkanSDK --accept-licenses --default-answer --confirm-command install
-        echo "VULKAN_SDK=C:\VulkanSDK" >> $GITHUB_ENV
-        echo "C:\VulkanSDK\Bin" >> $GITHUB_PATH
+    - name: Setup Vulkan SDK
+      uses: humbletim/install-vulkan-sdk@v1.1
+      with:
+        version: latest
+        cache: true
 
     - name: Configure CMake
-      run: cmake -B build -S . -DVULKAN_SDK=C:\VulkanSDK
+      run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
 
     - name: Build
       run: cmake --build build --config Release
 
     - name: Run Dependency Test
-      run: .\build\Release\TestDeps.exe
+      run: |
+        cd build/Release
+        .\TestDeps.exe
