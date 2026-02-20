@@ -1,9 +1,10 @@
 #pragma once
 
+#include "Mamancraft/Renderer/Vulkan/VulkanDevice.hpp"
 #include <SDL3/SDL.h>
+#include <memory>
 #include <vector>
 #include <vulkan/vulkan.h>
-
 
 namespace mc {
 
@@ -16,8 +17,8 @@ public:
   VulkanContext &operator=(const VulkanContext &) = delete;
 
   VkInstance GetInstance() const { return m_Instance; }
-  VkPhysicalDevice GetPhysicalDevice() const { return m_PhysicalDevice; }
-  VkDevice GetDevice() const { return m_Device; }
+  VkSurfaceKHR GetSurface() const { return m_Surface; }
+  const std::unique_ptr<VulkanDevice> &GetDevice() const { return m_Device; }
 
 private:
   void Init();
@@ -25,7 +26,9 @@ private:
 
   void CreateInstance();
   void SetupDebugMessenger();
+  void CreateSurface();
   void PickPhysicalDevice();
+  QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
   void CreateLogicalDevice();
 
   bool CheckValidationLayerSupport();
@@ -36,9 +39,10 @@ private:
 
   VkInstance m_Instance = VK_NULL_HANDLE;
   VkDebugUtilsMessengerEXT m_DebugMessenger = VK_NULL_HANDLE;
+  VkSurfaceKHR m_Surface = VK_NULL_HANDLE;
   VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
-  VkDevice m_Device = VK_NULL_HANDLE;
-  VkQueue m_GraphicsQueue = VK_NULL_HANDLE;
+
+  std::unique_ptr<VulkanDevice> m_Device;
 
 #ifdef NDEBUG
   const bool m_EnableValidationLayers = false;
