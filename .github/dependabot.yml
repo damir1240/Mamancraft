@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # Check for updates to GitHub Actions (build.yml and others)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "ci/cd"
+      - "dependencies"
+
+  # Check for updates to Git Submodules (SDL3, GLM, spdlog)
+  - package-ecosystem: "gitsubmodule"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "external"
+
+  # Optional: Check for updates to CMake (if using package managers like FetchContent/vcpkg in the future)
+  # For now, we use submodules, but Dependabot can also track CMake versions if specified.
