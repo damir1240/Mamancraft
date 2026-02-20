@@ -35,3 +35,4 @@ external/*/bin/
 *.log
 *.tmp
 *.bak
+ncompile_flags.txt
