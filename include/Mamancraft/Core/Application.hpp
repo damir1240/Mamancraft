@@ -2,10 +2,13 @@
 
 #include <SDL3/SDL.h>
 #include <cstdint>
+#include <memory>
 #include <string>
 
 
 namespace mc {
+
+class VulkanContext;
 
 struct AppConfig {
   std::string title = "Mamancraft";
@@ -34,6 +37,7 @@ private:
   AppConfig m_Config;
   bool m_IsRunning = false;
   SDL_Window *m_Window = nullptr;
+  std::unique_ptr<VulkanContext> m_VulkanContext;
 };
 
 } // namespace mc

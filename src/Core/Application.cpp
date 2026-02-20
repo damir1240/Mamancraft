@@ -1,5 +1,6 @@
 #include "Mamancraft/Core/Application.hpp"
 #include "Mamancraft/Core/Logger.hpp"
+#include "Mamancraft/Renderer/VulkanContext.hpp"
 
 #include <stdexcept>
 
@@ -33,12 +34,16 @@ void Application::Init() {
     throw std::runtime_error("SDL Window creation failed");
   }
 
+  m_VulkanContext = std::make_unique<VulkanContext>(m_Window);
+
   m_IsRunning = true;
   MC_INFO("Application initialized successfully.");
 }
 
 void Application::Shutdown() {
   MC_INFO("Shutting down Application.");
+
+  m_VulkanContext.reset();
 
   if (m_Window) {
     SDL_DestroyWindow(m_Window);
