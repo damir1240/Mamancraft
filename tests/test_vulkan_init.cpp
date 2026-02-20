@@ -4,7 +4,6 @@
 #include <SDL3/SDL_vulkan.h>
 #include <gtest/gtest.h>
 
-
 using namespace mc;
 
 class VulkanContextTest : public ::testing::Test {
@@ -28,15 +27,8 @@ protected:
 };
 
 TEST_F(VulkanContextTest, InitializationPhases) {
-  std::unique_ptr<VulkanContext> context;
-
-  try {
-    context = std::make_unique<VulkanContext>(m_Window);
-  } catch (const std::exception &e) {
-    GTEST_SKIP() << "Skipping test since Vulkan initialization failed. Run "
-                    "environment may lack appropriate drivers or GPU. Reason: "
-                 << e.what();
-  }
+  std::unique_ptr<VulkanContext> context =
+      std::make_unique<VulkanContext>(m_Window);
 
   // Phase 2: Core Vulkan Objects
   ASSERT_NE(context->GetInstance(), VK_NULL_HANDLE);
