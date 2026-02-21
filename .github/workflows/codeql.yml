@@ -43,6 +43,11 @@ jobs:
         languages: ${{ matrix.language }}
         # "security-and-quality" includes more detailed queries for best practices
         queries: security-and-quality
+        config: |
+          paths-ignore:
+            - 'external'
+            - '**/external/**'
+            - 'build/_deps'
 
     # Manual build is required for C++ to let CodeQL trace compilation
     - name: Configure CMake
