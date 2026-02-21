@@ -2,7 +2,6 @@
 #include "Mamancraft/Core/Logger.hpp"
 
 #include <SDL3/SDL_vulkan.h>
-#include <array>
 #include <cstring>
 #include <set>
 #include <stdexcept>
