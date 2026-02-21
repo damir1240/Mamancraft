@@ -1,10 +1,13 @@
 #include "Mamancraft/Core/Application.hpp"
+#include "Mamancraft/Core/FileSystem.hpp"
 #include "Mamancraft/Core/Logger.hpp"
+
 
 #include <exception>
 
 int main(int argc, char *argv[]) {
-  mc::Logger::Init();
+  mc::FileSystem::CreateDirectories();
+  mc::Logger::Init((mc::FileSystem::GetLogsDir() / "Mamancraft.log").string());
   MC_INFO("Mamancraft Engine starting...");
 
   try {

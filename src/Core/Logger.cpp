@@ -8,12 +8,12 @@ namespace mc {
 
 std::shared_ptr<spdlog::logger> Logger::s_CoreLogger;
 
-void Logger::Init() {
+void Logger::Init(const std::string &logFilePath) {
   std::vector<spdlog::sink_ptr> logSinks;
   logSinks.emplace_back(
       std::make_shared<spdlog::sinks::stdout_color_sink_mt>());
-  logSinks.emplace_back(std::make_shared<spdlog::sinks::basic_file_sink_mt>(
-      "Mamancraft.log", true));
+  logSinks.emplace_back(
+      std::make_shared<spdlog::sinks::basic_file_sink_mt>(logFilePath, true));
 
   // Pattern: [Time] [Thread] LoggerName: Message
   logSinks[0]->set_pattern("%^[%T] %n: %v%$");

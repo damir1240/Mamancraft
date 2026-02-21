@@ -1,4 +1,5 @@
 #include "Mamancraft/Core/AssetManager.hpp"
+#include "Mamancraft/Core/FileSystem.hpp"
 #include "Mamancraft/Core/Logger.hpp"
 #include "Mamancraft/Renderer/VulkanContext.hpp"
 
@@ -8,20 +9,8 @@
 namespace mc {
 
 AssetManager::AssetManager(VulkanContext &context) : m_Context(context) {
-  // In SDL3, SDL_GetBasePath returns a const char* that does NOT need to be
-  // freed. However, some versions might still return char*. Using const char*
-  // is safer.
-  const char *basePath = SDL_GetBasePath();
-  if (basePath) {
-    m_BaseDir = std::filesystem::path(basePath);
-    // Note: SDL3 documentation states that for SDL_GetBasePath, you should NOT
-    // free the string. It returns a pointer to internal memory.
-  } else {
-    MC_WARN("SDL_GetBasePath failed, using current directory for assets.");
-    m_BaseDir = std::filesystem::current_path();
-  }
-
-  MC_INFO("Modern AssetManager initialized. Base directory: {}",
+  m_BaseDir = FileSystem::GetAssetsDir();
+  MC_INFO("Modern AssetManager initialized. Assets directory: {}",
           m_BaseDir.string());
 }
 

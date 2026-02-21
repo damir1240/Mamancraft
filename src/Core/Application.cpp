@@ -1,4 +1,5 @@
 #include "Mamancraft/Core/Application.hpp"
+#include "Mamancraft/Core/FileSystem.hpp"
 #include "Mamancraft/Core/Logger.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanShader.hpp"
 #include "Mamancraft/Renderer/VulkanContext.hpp"
@@ -38,13 +39,21 @@ void Application::Init() {
   m_AssetManager = std::make_unique<AssetManager>(*m_VulkanContext);
   m_InputManager = std::make_unique<InputManager>();
 
-  // Default Key Bindings
+  // Set Default Key Bindings
   m_InputManager->BindAction("Jump", SDL_SCANCODE_SPACE);
   m_InputManager->BindAction("MoveForward", SDL_SCANCODE_W);
   m_InputManager->BindAction("MoveBackward", SDL_SCANCODE_S);
   m_InputManager->BindAction("MoveLeft", SDL_SCANCODE_A);
   m_InputManager->BindAction("MoveRight", SDL_SCANCODE_D);
+  m_InputManager->BindAction("Menu", SDL_SCANCODE_ESCAPE);
   m_InputManager->BindMouseButton("Interact", SDL_BUTTON_LEFT);
+
+  // Load User Configuration (Overrides Defaults)
+  std::string configPath = (FileSystem::GetConfigDir() / "input.cfg").string();
+  m_InputManager->LoadConfiguration(configPath);
+
+  // Save current configuration back to ensure the file exists and is up to date
+  m_InputManager->SaveConfiguration(configPath);
 
   // Load resources via handles (Best Practice)
   auto vertHandle = m_AssetManager->LoadShader("shaders/triangle.vert.spv");
@@ -52,6 +61,12 @@ void Application::Init() {
 
   auto vertShader = m_AssetManager->GetShader(vertHandle);
   auto fragShader = m_AssetManager->GetShader(fragHandle);
+
+  if (!vertShader || !fragShader) {
+    MC_CRITICAL(
+        "Required shaders failed to load! Check your assets directory.");
+    throw std::runtime_error("Required shaders failed to load");
+  }
 
   PipelineConfigInfo pipelineConfig;
   VulkanPipeline::DefaultPipelineConfigInfo(pipelineConfig);
@@ -122,8 +137,8 @@ void Application::ProcessEvents() {
 }
 
 void Application::Update() {
-  if (m_InputManager->IsKeyPressed(SDL_SCANCODE_ESCAPE)) {
-    MC_INFO("Escape key pressed. Stopping application.");
+  if (m_InputManager->IsActionPressed("Menu")) {
+    MC_INFO("Menu Action triggered. Stopping application.");
     m_IsRunning = false;
   }
 

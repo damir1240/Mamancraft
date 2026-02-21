@@ -61,10 +61,15 @@ public:
   // --- Action Mapping ---
   void BindAction(const std::string &actionName, SDL_Scancode key);
   void BindMouseButton(const std::string &actionName, uint8_t button);
+  void ClearBindings(const std::string &actionName);
 
   bool IsActionPressed(const std::string &actionName) const;
   bool IsActionHeld(const std::string &actionName) const;
   bool IsActionReleased(const std::string &actionName) const;
+
+  // --- Configuration ---
+  void LoadConfiguration(const std::string &path);
+  void SaveConfiguration(const std::string &path);
 
 private:
   // Raw Keyboard State

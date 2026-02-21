@@ -34,10 +34,10 @@ set(SPV_FILES "")
 
 foreach(SHADER ${SHADERS})
     get_filename_component(FILE_NAME ${SHADER} NAME)
-    set(SPV_FILE "${CMAKE_BINARY_DIR}/shaders/${FILE_NAME}.spv")
+    set(SPV_FILE "${CMAKE_BINARY_DIR}/assets/shaders/${FILE_NAME}.spv")
     add_custom_command(
         OUTPUT ${SPV_FILE}
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/shaders"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/assets/shaders"
         COMMAND ${GLSLC_EXECUTABLE} ${SHADER} -o ${SPV_FILE}
         DEPENDS ${SHADER}
         COMMENT "Compiling shader ${FILE_NAME} to vulkan SPIR-V"
@@ -65,7 +65,15 @@ target_link_libraries(MamancraftEngine PUBLIC
 )
 
 add_executable(Mamancraft src/main.cpp)
+add_dependencies(Mamancraft MamancraftShaders)
 target_link_libraries(Mamancraft PRIVATE MamancraftEngine)
+
+# Copy assets to executable directory for portable structure
+add_custom_command(TARGET Mamancraft POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_BINARY_DIR}/assets"
+        "$<TARGET_FILE_DIR:Mamancraft>/assets"
+)
 
 # GoogleTest
 include(FetchContent)
