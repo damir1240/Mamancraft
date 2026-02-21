@@ -23,6 +23,7 @@ VulkanFramebuffer::VulkanFramebuffer(
     MC_CRITICAL("Failed to create Framebuffer!");
     throw std::runtime_error("failed to create framebuffer!");
   }
+  MC_TRACE("Vulkan Framebuffer created successfully.");
 }
 
 VulkanFramebuffer::~VulkanFramebuffer() {

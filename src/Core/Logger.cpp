@@ -4,7 +4,6 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <vector>
 
-
 namespace mc {
 
 std::shared_ptr<spdlog::logger> Logger::s_CoreLogger;

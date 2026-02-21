@@ -400,6 +400,8 @@ void VulkanContext::CreateFramebuffers() {
     m_Framebuffers.push_back(std::make_unique<VulkanFramebuffer>(
         m_Device, m_RenderPass->GetRenderPass(), attachments, swapChainExtent));
   }
+  MC_INFO("Vulkan Framebuffers ({0}) created successfully.",
+          m_Framebuffers.size());
 }
 
 } // namespace mc

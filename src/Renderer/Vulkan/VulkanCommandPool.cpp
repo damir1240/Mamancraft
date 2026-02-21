@@ -20,6 +20,7 @@ VulkanCommandPool::VulkanCommandPool(
     MC_CRITICAL("Failed to create Command Pool!");
     throw std::runtime_error("failed to create command pool!");
   }
+  MC_INFO("Vulkan Command Pool created successfully.");
 }
 
 VulkanCommandPool::~VulkanCommandPool() {

@@ -66,6 +66,18 @@ TEST_F(VulkanContextTest, InitializationPhases) {
   auto cmdBuffer = context->GetCommandPool()->AllocateCommandBuffer(true);
   ASSERT_NE(cmdBuffer, nullptr);
   EXPECT_NE(cmdBuffer->GetCommandBuffer(), VK_NULL_HANDLE);
+
+  // Phase 5: Render Pass & Framebuffers
+  ASSERT_NE(context->GetRenderPass(), nullptr);
+  EXPECT_NE(context->GetRenderPass()->GetRenderPass(), VK_NULL_HANDLE);
+
+  const auto &framebuffers = context->GetFramebuffers();
+  EXPECT_EQ(framebuffers.size(),
+            context->GetSwapchain()->GetImageViews().size());
+  for (const auto &fb : framebuffers) {
+    ASSERT_NE(fb, nullptr);
+    EXPECT_NE(fb->GetFramebuffer(), VK_NULL_HANDLE);
+  }
 }
 
 int main(int argc, char **argv) {

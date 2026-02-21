@@ -172,10 +172,9 @@ void VulkanSwapchain::CreateSwapchain() {
 
   if (vkCreateSwapchainKHR(m_Device->GetLogicalDevice(), &createInfo, nullptr,
                            &m_Swapchain) != VK_SUCCESS) {
-    MC_CRITICAL("Failed to create swapchain!");
+    MC_CRITICAL("Failed to create Vulkan Swapchain!");
     throw std::runtime_error("failed to create swapchain!");
   }
-
   vkGetSwapchainImagesKHR(m_Device->GetLogicalDevice(), m_Swapchain,
                           &imageCount, nullptr);
   m_Images.resize(imageCount);
