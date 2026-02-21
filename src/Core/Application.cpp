@@ -157,21 +157,33 @@ void Application::Update(float dt) {
   glm::vec3 pos = m_Camera.GetPosition();
   glm::vec3 rot = m_Camera.GetRotation();
 
+  // Compute direction vectors for movement (on XZ plane)
+  float yawRad = glm::radians(rot.y);
+  glm::vec3 flatForward = {sin(yawRad), 0.0f, -cos(yawRad)};
+  glm::vec3 flatRight = {cos(yawRad), 0.0f, sin(yawRad)};
+
   if (m_InputManager->IsActionHeld("MoveForward"))
-    pos.z -= moveSpeed;
+    pos += flatForward * moveSpeed;
   if (m_InputManager->IsActionHeld("MoveBackward"))
-    pos.z += moveSpeed;
+    pos -= flatForward * moveSpeed;
   if (m_InputManager->IsActionHeld("MoveLeft"))
-    pos.x -= moveSpeed;
+    pos -= flatRight * moveSpeed;
   if (m_InputManager->IsActionHeld("MoveRight"))
-    pos.x += moveSpeed;
+    pos += flatRight * moveSpeed;
   if (m_InputManager->IsActionHeld("Jump"))
     pos.y += moveSpeed;
 
   if (m_InputManager->IsCursorLocked()) {
     glm::vec2 delta = m_InputManager->GetMouseDelta();
-    rot.y -= delta.x * 0.1f;
-    rot.x -= delta.y * 0.1f;
+    float sensitivity = 0.1f;
+
+    // Mouse RIGHT (delta.x > 0) should turn camera RIGHT (increase yaw)
+    rot.y += delta.x * sensitivity;
+
+    // Mouse DOWN (delta.y > 0) should tip camera DOWN (decrease pitch)
+    rot.x -= delta.y * sensitivity;
+
+    // Clamp pitch to prevent flipping
     rot.x = glm::clamp(rot.x, -89.0f, 89.0f);
   }
 

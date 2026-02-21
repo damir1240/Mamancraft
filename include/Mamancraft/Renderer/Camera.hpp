@@ -22,6 +22,10 @@ public:
   const glm::mat4 &GetProjection() const { return m_Projection; }
   const glm::mat4 &GetView() const { return m_View; }
 
+  glm::vec3 GetForward() const { return m_Forward; }
+  glm::vec3 GetRight() const { return m_Right; }
+  glm::vec3 GetUp() const { return m_Up; }
+
   void Update();
 
 private:
@@ -30,6 +34,10 @@ private:
 
   glm::vec3 m_Position{0.0f, 0.0f, 0.0f};
   glm::vec3 m_Rotation{0.0f, 0.0f, 0.0f}; // Pitch, Yaw, Roll
+
+  glm::vec3 m_Forward{0.0f, 0.0f, -1.0f};
+  glm::vec3 m_Right{1.0f, 0.0f, 0.0f};
+  glm::vec3 m_Up{0.0f, 1.0f, 0.0f};
 };
 
 } // namespace mc

@@ -22,16 +22,18 @@ void Camera::SetOrthographic(float left, float right, float bottom, float top,
 }
 
 void Camera::Update() {
-  glm::mat4 rotation = glm::mat4(1.0f);
-  rotation =
-      glm::rotate(rotation, glm::radians(m_Rotation.x), {1.0f, 0.0f, 0.0f});
-  rotation =
-      glm::rotate(rotation, glm::radians(m_Rotation.y), {0.0f, 1.0f, 0.0f});
-  rotation =
-      glm::rotate(rotation, glm::radians(m_Rotation.z), {0.0f, 0.0f, 1.0f});
+  float pitch = glm::radians(m_Rotation.x);
+  float yaw = glm::radians(m_Rotation.y);
 
-  glm::vec3 translation = -m_Position;
-  m_View = rotation * glm::translate(glm::mat4(1.0f), translation);
+  m_Forward.x = sin(yaw) * cos(pitch);
+  m_Forward.y = sin(pitch);
+  m_Forward.z = -cos(yaw) * cos(pitch);
+  m_Forward = glm::normalize(m_Forward);
+
+  m_Right = glm::normalize(glm::cross(m_Forward, glm::vec3(0.0f, 1.0f, 0.0f)));
+  m_Up = glm::normalize(glm::cross(m_Right, m_Forward));
+
+  m_View = glm::lookAt(m_Position, m_Position + m_Forward, m_Up);
 }
 
 } // namespace mc
