@@ -2,9 +2,11 @@
 
 #include <SDL3/SDL.h>
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <string>
 
+#include "Mamancraft/Core/AssetManager.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanMesh.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanPipeline.hpp"
 #include "Mamancraft/Renderer/VulkanContext.hpp"
@@ -41,7 +43,8 @@ private:
   std::unique_ptr<VulkanContext> m_VulkanContext;
   std::unique_ptr<VulkanPipeline> m_Pipeline;
   std::unique_ptr<VulkanRenderer> m_Renderer;
-  std::unique_ptr<VulkanMesh> m_Mesh;
+  std::unique_ptr<AssetManager> m_AssetManager;
+  std::shared_ptr<VulkanMesh> m_Mesh;
 };
 
 } // namespace mc

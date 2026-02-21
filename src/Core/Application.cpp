@@ -36,14 +36,10 @@ void Application::Init() {
   }
 
   m_VulkanContext = std::make_unique<VulkanContext>(m_Window);
+  m_AssetManager = std::make_unique<AssetManager>(*m_VulkanContext);
 
-  const char *basePath = SDL_GetBasePath();
-  std::string shadersPath = std::string(basePath ? basePath : "") + "shaders/";
-
-  VulkanShader vertShader(m_VulkanContext->GetDevice(),
-                          shadersPath + "triangle.vert.spv");
-  VulkanShader fragShader(m_VulkanContext->GetDevice(),
-                          shadersPath + "triangle.frag.spv");
+  auto vertShader = m_AssetManager->GetShader("shaders/triangle.vert.spv");
+  auto fragShader = m_AssetManager->GetShader("shaders/triangle.frag.spv");
 
   PipelineConfigInfo pipelineConfig;
   VulkanPipeline::DefaultPipelineConfigInfo(pipelineConfig);
@@ -51,7 +47,7 @@ void Application::Init() {
       m_VulkanContext->GetSwapchain()->GetImageFormat();
 
   m_Pipeline = std::make_unique<VulkanPipeline>(
-      m_VulkanContext->GetDevice(), vertShader, fragShader, pipelineConfig);
+      m_VulkanContext->GetDevice(), *vertShader, *fragShader, pipelineConfig);
   m_Renderer = std::make_unique<VulkanRenderer>(*m_VulkanContext);
 
   VulkanMesh::Builder meshBuilder;
@@ -63,7 +59,8 @@ void Application::Init() {
   };
   meshBuilder.indices = {0, 1, 2, 2, 3, 0};
 
-  m_Mesh = std::make_unique<VulkanMesh>(*m_VulkanContext, meshBuilder);
+  m_Mesh = std::make_shared<VulkanMesh>(*m_VulkanContext, meshBuilder);
+  m_AssetManager->AddMesh("triangle", m_Mesh);
 
   m_IsRunning = true;
   MC_INFO("Application initialized successfully.");
