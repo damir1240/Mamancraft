@@ -18,11 +18,24 @@ AssetManager::~AssetManager() { Clear(); }
 
 void AssetManager::Clear() {
   if (!m_ShaderCache.empty() || !m_MeshCache.empty()) {
-    MC_INFO("Clearing AssetManager caches (Best Practice Cleanup)");
-    // Clean order: meshes (which hold buffers) then shaders
+    MC_INFO("AssetManager::Clear() - Starting cleanup");
+    MC_DEBUG("AssetManager: Clearing {} meshes and {} shaders", 
+             m_MeshCache.size(), m_ShaderCache.size());
+    
+    // CRITICAL: Clear meshes FIRST (they contain VulkanBuffers that use VMA)
+    // This must happen BEFORE VulkanContext destroys the VMA allocator
+    MC_DEBUG("AssetManager: Clearing mesh cache...");
     m_MeshCache.clear();
+    
+    MC_DEBUG("AssetManager: Clearing shader cache...");
     m_ShaderCache.clear();
+    
+    MC_DEBUG("AssetManager: Clearing name-to-handle map...");
     m_NameToHandle.clear();
+    
+    MC_INFO("AssetManager::Clear() - Cleanup completed");
+  } else {
+    MC_DEBUG("AssetManager::Clear() - No assets to clear");
   }
 }
 

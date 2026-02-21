@@ -24,8 +24,10 @@ VulkanAllocator::VulkanAllocator(vk::Instance instance,
 
 VulkanAllocator::~VulkanAllocator() {
   if (m_Allocator) {
+    MC_DEBUG("VulkanAllocator: Destroying VMA allocator instance {}", (void*)m_Allocator);
     vmaDestroyAllocator(m_Allocator);
-    MC_INFO("Vulkan Memory Allocator (VMA) destroyed.");
+    m_Allocator = nullptr;
+    MC_INFO("VulkanAllocator: VMA allocator destroyed successfully");
   }
 }
 

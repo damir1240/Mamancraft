@@ -1,4 +1,5 @@
 #include "Mamancraft/Renderer/Vulkan/VulkanMesh.hpp"
+#include "Mamancraft/Core/Logger.hpp"
 #include "Mamancraft/Renderer/VulkanContext.hpp"
 #include <cassert>
 
@@ -6,11 +7,19 @@ namespace mc {
 
 VulkanMesh::VulkanMesh(VulkanContext &context, const Builder &builder)
     : m_Context(context) {
+  MC_DEBUG("VulkanMesh: Creating mesh with {} vertices and {} indices", 
+           builder.vertices.size(), builder.indices.size());
   CreateVertexBuffers(builder.vertices);
   CreateIndexBuffers(builder.indices);
+  MC_DEBUG("VulkanMesh: Mesh created successfully");
 }
 
-VulkanMesh::~VulkanMesh() {}
+VulkanMesh::~VulkanMesh() {
+  MC_DEBUG("VulkanMesh destructor: Destroying mesh (vertex buffer: {}, index buffer: {})",
+           (void*)m_VertexBuffer.get(), (void*)m_IndexBuffer.get());
+  // Buffers will be destroyed automatically by unique_ptr
+  // CRITICAL: This must happen BEFORE VMA allocator is destroyed
+}
 
 void VulkanMesh::CreateVertexBuffers(const std::vector<Vertex> &vertices) {
   m_VertexCount = static_cast<uint32_t>(vertices.size());

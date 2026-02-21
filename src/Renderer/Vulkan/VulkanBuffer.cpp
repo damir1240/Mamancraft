@@ -46,11 +46,19 @@ VulkanBuffer::VulkanBuffer(VmaAllocator allocator, vk::DeviceSize instanceSize,
 }
 
 VulkanBuffer::~VulkanBuffer() {
+  MC_TRACE("VulkanBuffer destructor: Destroying buffer {}", (void*)m_Buffer);
+  
   Unmap();
+  
   if (m_Buffer && m_Allocation) {
+    MC_TRACE("VulkanBuffer: Calling vmaDestroyBuffer for buffer {}", (void*)m_Buffer);
     vmaDestroyBuffer(m_Allocator, static_cast<VkBuffer>(m_Buffer),
                      m_Allocation);
+    m_Buffer = nullptr;
+    m_Allocation = nullptr;
   }
+  
+  MC_TRACE("VulkanBuffer destructor: Completed");
 }
 
 vk::Result VulkanBuffer::Map() {

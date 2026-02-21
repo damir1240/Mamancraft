@@ -73,40 +73,50 @@ void VulkanContext::Init() {
 }
 
 void VulkanContext::Shutdown() {
-  MC_INFO("Shutting down Vulkan Context");
+  MC_INFO("VulkanContext::Shutdown() - Starting Vulkan cleanup");
 
   // Best Practice: Wait for device to be idle before destroying resources
   if (m_Device) {
+    MC_DEBUG("VulkanContext: Waiting for device to become idle...");
     m_Device->GetLogicalDevice().waitIdle();
+    MC_DEBUG("VulkanContext: Device is now idle");
   }
 
   // Destroy resources in reverse order of creation
   // 1. Immediate fence (created last in Init)
   if (m_ImmediateFence && m_Device) {
+    MC_DEBUG("VulkanContext: Destroying immediate fence...");
     m_Device->GetLogicalDevice().destroyFence(m_ImmediateFence);
     m_ImmediateFence = nullptr;
   }
 
   // 2. Command pool (depends on device)
+  MC_DEBUG("VulkanContext: Destroying command pool...");
   m_CommandPool.reset();
 
-  // 3. Allocator (VMA - must be destroyed before device)
+  // 3. Allocator (VMA - CRITICAL: must be destroyed AFTER all buffers are freed)
+  MC_DEBUG("VulkanContext: Destroying VMA allocator...");
   m_Allocator.reset();
+  MC_DEBUG("VulkanContext: VMA allocator destroyed");
 
   // 4. Swapchain (depends on device and surface)
+  MC_DEBUG("VulkanContext: Destroying swapchain...");
   m_Swapchain.reset();
 
   // 5. Logical device
+  MC_DEBUG("VulkanContext: Destroying logical device...");
   m_Device.reset();
 
   // 6. Surface (depends on instance)
   if (m_Surface) {
+    MC_DEBUG("VulkanContext: Destroying surface...");
     m_Instance.destroySurfaceKHR(m_Surface);
     m_Surface = nullptr;
   }
 
   // 7. Debug messenger (depends on instance)
   if (m_EnableValidationLayers && m_DebugMessenger) {
+    MC_DEBUG("VulkanContext: Destroying debug messenger...");
     DestroyDebugUtilsMessengerEXT(
         static_cast<VkInstance>(m_Instance),
         static_cast<VkDebugUtilsMessengerEXT>(m_DebugMessenger), nullptr);
@@ -115,9 +125,12 @@ void VulkanContext::Shutdown() {
 
   // 8. Instance (destroyed last)
   if (m_Instance) {
+    MC_DEBUG("VulkanContext: Destroying Vulkan instance...");
     m_Instance.destroy();
     m_Instance = nullptr;
   }
+  
+  MC_INFO("VulkanContext::Shutdown() - Vulkan cleanup completed");
 }
 
 void VulkanContext::CreateInstance() {

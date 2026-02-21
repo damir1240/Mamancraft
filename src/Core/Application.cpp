@@ -91,27 +91,47 @@ void Application::Init() {
 }
 
 void Application::Shutdown() {
-  MC_INFO("Shutting down Application.");
+  MC_INFO("Application::Shutdown() - Starting shutdown sequence");
 
-  // Destroy objects in reverse order of creation
-  // VulkanContext::Shutdown() will call waitIdle() internally
+  // CRITICAL ORDER: Destroy objects that use VMA allocator BEFORE VulkanContext
+  
+  // 1. Renderer (contains command buffers and sync objects)
+  MC_DEBUG("Application: Destroying renderer...");
   m_Renderer.reset();
+  
+  // 2. Pipeline (contains shader modules)
+  MC_DEBUG("Application: Destroying pipeline...");
   m_Pipeline.reset();
 
+  // 3. AssetManager - MUST be cleared before VulkanContext
+  //    because meshes contain VulkanBuffers that use VMA allocator
   if (m_AssetManager) {
+    MC_DEBUG("Application: Clearing AssetManager (contains VMA-allocated buffers)...");
     m_AssetManager->Clear(); // Explicitly clear caches to free VMA allocations
+    MC_DEBUG("Application: Destroying AssetManager...");
     m_AssetManager.reset();
   }
 
-  m_VulkanContext.reset(); // VMA allocator is safe to destroy now
+  // 4. VulkanContext (contains VMA allocator - destroyed last among Vulkan objects)
+  MC_DEBUG("Application: Destroying VulkanContext (will destroy VMA allocator)...");
+  m_VulkanContext.reset();
 
+  // 5. SDL Window
   if (m_Window) {
+    MC_DEBUG("Application: Destroying SDL window...");
     SDL_DestroyWindow(m_Window);
     m_Window = nullptr;
   }
 
+  // 6. InputManager
+  MC_DEBUG("Application: Destroying InputManager...");
   m_InputManager.reset();
+  
+  // 7. SDL Quit
+  MC_DEBUG("Application: Calling SDL_Quit()...");
   SDL_Quit();
+  
+  MC_INFO("Application::Shutdown() - Shutdown completed successfully");
 }
 
 void Application::ProcessEvents() {
