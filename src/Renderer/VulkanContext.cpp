@@ -63,8 +63,8 @@ void VulkanContext::Init() {
   CreateSurface();
   PickPhysicalDevice();
   CreateLogicalDevice();
-  CreateSwapchain();
   CreateAllocator();
+  CreateSwapchain();
   CreateCommandPool();
 
   vk::FenceCreateInfo fenceCreateInfo;
@@ -418,7 +418,7 @@ bool VulkanContext::CheckDeviceExtensionSupport(vk::PhysicalDevice device) {
 
 void VulkanContext::CreateSwapchain() {
   m_Swapchain = std::make_unique<VulkanSwapchain>(
-      m_Device, static_cast<VkInstance>(m_Instance),
+      m_Device, m_Allocator, static_cast<VkInstance>(m_Instance),
       static_cast<VkSurfaceKHR>(m_Surface), m_Window);
 }
 

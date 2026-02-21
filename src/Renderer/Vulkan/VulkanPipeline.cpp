@@ -20,7 +20,7 @@ VulkanPipeline::VulkanPipeline(const std::unique_ptr<VulkanDevice> &device,
                              "undefined color attachment format!");
   }
 
-  CreatePipelineLayout();
+  CreatePipelineLayout(configInfo);
 
   vk::PipelineShaderStageCreateInfo vertShaderStageInfo;
   vertShaderStageInfo.stage = vk::ShaderStageFlagBits::eVertex;
@@ -97,12 +97,15 @@ VulkanPipeline::~VulkanPipeline() {
   }
 }
 
-void VulkanPipeline::CreatePipelineLayout() {
+void VulkanPipeline::CreatePipelineLayout(
+    const PipelineConfigInfo &configInfo) {
   vk::PipelineLayoutCreateInfo pipelineLayoutInfo;
-  pipelineLayoutInfo.setLayoutCount = 0;
-  pipelineLayoutInfo.pSetLayouts = nullptr;
-  pipelineLayoutInfo.pushConstantRangeCount = 0;
-  pipelineLayoutInfo.pPushConstantRanges = nullptr;
+  pipelineLayoutInfo.setLayoutCount =
+      static_cast<uint32_t>(configInfo.descriptorSetLayouts.size());
+  pipelineLayoutInfo.pSetLayouts = configInfo.descriptorSetLayouts.data();
+  pipelineLayoutInfo.pushConstantRangeCount =
+      static_cast<uint32_t>(configInfo.pushConstantRanges.size());
+  pipelineLayoutInfo.pPushConstantRanges = configInfo.pushConstantRanges.data();
 
   try {
     m_PipelineLayout =

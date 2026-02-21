@@ -1,9 +1,9 @@
 #pragma once
 
+#include "Mamancraft/Renderer/Vulkan/VulkanBuffer.hpp"
+#include "Mamancraft/Renderer/Vulkan/VulkanFrameData.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanPipeline.hpp"
 #include "Mamancraft/Renderer/VulkanContext.hpp"
-
-#include "Mamancraft/Renderer/Vulkan/VulkanCore.hpp"
 #include <memory>
 #include <vector>
 
@@ -25,16 +25,20 @@ public:
   void BeginRenderPass(vk::CommandBuffer commandBuffer);
   void EndRenderPass(vk::CommandBuffer commandBuffer);
 
-  void Draw(vk::CommandBuffer commandBuffer, VulkanPipeline &pipeline,
-            vk::Buffer vertexBuffer, vk::Buffer indexBuffer,
-            uint32_t indexCount);
+  void UpdateGlobalUbo(const GlobalUbo &ubo);
 
   void DrawMesh(vk::CommandBuffer commandBuffer, VulkanPipeline &pipeline,
-                VulkanMesh &mesh);
+                VulkanMesh &mesh, const PushConstantData &pushData);
+
+  vk::DescriptorSetLayout GetGlobalDescriptorSetLayout() const {
+    return m_GlobalDescriptorSetLayout;
+  }
 
 private:
   void CreateSyncObjects();
   void CreateCommandBuffers();
+  void CreateDescriptors();
+  void CreateUboBuffers();
 
 private:
   VulkanContext &m_Context;
@@ -43,13 +47,18 @@ private:
   std::vector<vk::Semaphore> m_ImageAvailableSemaphores;
   std::vector<vk::Semaphore> m_RenderFinishedSemaphores;
   std::vector<vk::Fence> m_InFlightFences;
-  std::vector<vk::Fence> m_ImagesInFlight;
 
   uint32_t m_CurrentFrameIndex = 0;
   uint32_t m_CurrentImageIndex = 0;
   bool m_IsFrameStarted = false;
 
   const int MAX_FRAMES_IN_FLIGHT = 2;
+
+  // Descriptors & UBOs
+  vk::DescriptorSetLayout m_GlobalDescriptorSetLayout = nullptr;
+  vk::DescriptorPool m_DescriptorPool = nullptr;
+  std::vector<vk::DescriptorSet> m_GlobalDescriptorSets;
+  std::vector<std::unique_ptr<VulkanBuffer>> m_UboBuffers;
 };
 
 } // namespace mc

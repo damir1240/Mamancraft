@@ -26,6 +26,8 @@ struct PipelineConfigInfo {
   vk::Format depthAttachmentFormat = vk::Format::eUndefined;
   std::vector<vk::VertexInputBindingDescription> bindingDescriptions{};
   std::vector<vk::VertexInputAttributeDescription> attributeDescriptions{};
+  std::vector<vk::DescriptorSetLayout> descriptorSetLayouts;
+  std::vector<vk::PushConstantRange> pushConstantRanges;
 };
 
 class VulkanPipeline {
@@ -44,7 +46,7 @@ public:
   static void DefaultPipelineConfigInfo(PipelineConfigInfo &configInfo);
 
 private:
-  void CreatePipelineLayout();
+  void CreatePipelineLayout(const PipelineConfigInfo &configInfo);
 
 private:
   const std::unique_ptr<VulkanDevice> &m_Device;

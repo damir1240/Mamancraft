@@ -17,10 +17,11 @@ VulkanBuffer::VulkanBuffer(VmaAllocator allocator, vk::DeviceSize instanceSize,
                            uint32_t instanceCount,
                            vk::BufferUsageFlags usageFlags,
                            VmaMemoryUsage memoryUsage,
+                           VmaAllocationCreateFlags allocationFlags,
                            vk::DeviceSize minOffsetAlignment)
     : m_Allocator(allocator), m_InstanceSize(instanceSize),
       m_InstanceCount(instanceCount), m_UsageFlags(usageFlags),
-      m_MemoryUsage(memoryUsage) {
+      m_MemoryUsage(memoryUsage), m_AllocationFlags(allocationFlags) {
 
   m_AlignmentSize = GetAlignment(instanceSize, minOffsetAlignment);
   m_BufferSize = m_AlignmentSize * instanceCount;
@@ -32,6 +33,7 @@ VulkanBuffer::VulkanBuffer(VmaAllocator allocator, vk::DeviceSize instanceSize,
 
   VmaAllocationCreateInfo allocInfo = {};
   allocInfo.usage = memoryUsage;
+  allocInfo.flags = allocationFlags;
 
   VkBufferCreateInfo vkBufferInfo = static_cast<VkBufferCreateInfo>(bufferInfo);
   VkBuffer vkBuffer;
@@ -46,18 +48,19 @@ VulkanBuffer::VulkanBuffer(VmaAllocator allocator, vk::DeviceSize instanceSize,
 }
 
 VulkanBuffer::~VulkanBuffer() {
-  MC_TRACE("VulkanBuffer destructor: Destroying buffer {}", (void*)m_Buffer);
-  
+  MC_TRACE("VulkanBuffer destructor: Destroying buffer {}", (void *)m_Buffer);
+
   Unmap();
-  
+
   if (m_Buffer && m_Allocation) {
-    MC_TRACE("VulkanBuffer: Calling vmaDestroyBuffer for buffer {}", (void*)m_Buffer);
+    MC_TRACE("VulkanBuffer: Calling vmaDestroyBuffer for buffer {}",
+             (void *)m_Buffer);
     vmaDestroyBuffer(m_Allocator, static_cast<VkBuffer>(m_Buffer),
                      m_Allocation);
     m_Buffer = nullptr;
     m_Allocation = nullptr;
   }
-  
+
   MC_TRACE("VulkanBuffer destructor: Completed");
 }
 
@@ -77,6 +80,10 @@ void VulkanBuffer::Unmap() {
 
 void VulkanBuffer::WriteToBuffer(void *data, vk::DeviceSize size,
                                  vk::DeviceSize offset) {
+  if (!m_MappedRegion) {
+    MC_ERROR("VulkanBuffer: Attempting to write to an unmapped buffer!");
+    return;
+  }
   if (size == VK_WHOLE_SIZE) {
     memcpy(m_MappedRegion, data, m_BufferSize);
   } else {

@@ -78,9 +78,20 @@ TEST_F(VulkanPipelineTest, CreateVulkanPipeline) {
   mc::VulkanShader fragShader(context->GetDevice(),
                               shadersPath + "triangle.frag.spv");
 
+  mc::VulkanRenderer renderer(*context);
+
   mc::PipelineConfigInfo configInfo;
   mc::VulkanPipeline::DefaultPipelineConfigInfo(configInfo);
   configInfo.colorAttachmentFormat = context->GetSwapchain()->GetImageFormat();
+  configInfo.depthAttachmentFormat = context->GetSwapchain()->GetDepthFormat();
+
+  configInfo.descriptorSetLayouts = {renderer.GetGlobalDescriptorSetLayout()};
+
+  vk::PushConstantRange pushConstantRange{};
+  pushConstantRange.stageFlags = vk::ShaderStageFlagBits::eVertex;
+  pushConstantRange.offset = 0;
+  pushConstantRange.size = sizeof(mc::PushConstantData);
+  configInfo.pushConstantRanges = {pushConstantRange};
 
   EXPECT_NO_THROW({
     mc::VulkanPipeline pipeline(context->GetDevice(), vertShader, fragShader,
@@ -96,9 +107,9 @@ TEST_F(VulkanPipelineTest, CreateVulkanRenderer) {
 
 TEST_F(VulkanPipelineTest, CreateVulkanMesh) {
   mc::VulkanMesh::Builder builder;
-  builder.vertices = {{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-                      {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-                      {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}};
+  builder.vertices = {{{0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+                      {{0.5f, 0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}},
+                      {{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}}};
   builder.indices = {0, 1, 2};
 
   EXPECT_NO_THROW({ mc::VulkanMesh mesh(*context, builder); });

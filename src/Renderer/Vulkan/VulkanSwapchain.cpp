@@ -7,13 +7,15 @@
 
 namespace mc {
 
-VulkanSwapchain::VulkanSwapchain(const std::unique_ptr<VulkanDevice> &device,
-                                 vk::Instance instance, vk::SurfaceKHR surface,
-                                 SDL_Window *window)
-    : m_Device(device), m_Instance(instance), m_Surface(surface),
-      m_Window(window) {
+VulkanSwapchain::VulkanSwapchain(
+    const std::unique_ptr<VulkanDevice> &device,
+    const std::unique_ptr<VulkanAllocator> &allocator, vk::Instance instance,
+    vk::SurfaceKHR surface, SDL_Window *window)
+    : m_Device(device), m_Allocator(allocator), m_Instance(instance),
+      m_Surface(surface), m_Window(window) {
   CreateSwapchain();
   CreateImageViews();
+  CreateDepthResources();
 }
 
 VulkanSwapchain::~VulkanSwapchain() { CleanUp(); }
@@ -35,10 +37,13 @@ void VulkanSwapchain::Recreate() {
   CleanUp();
   CreateSwapchain();
   CreateImageViews();
+  CreateDepthResources();
 }
 
 void VulkanSwapchain::CleanUp() {
   vk::Device device = m_Device->GetLogicalDevice();
+
+  m_DepthImage.reset();
 
   for (auto imageView : m_ImageViews) {
     device.destroyImageView(imageView);
@@ -49,6 +54,32 @@ void VulkanSwapchain::CleanUp() {
     device.destroySwapchainKHR(m_Swapchain);
     m_Swapchain = nullptr;
   }
+}
+
+void VulkanSwapchain::CreateDepthResources() {
+  m_DepthFormat = FindDepthFormat();
+  m_DepthImage = std::make_unique<VulkanImage>(
+      m_Allocator, m_Device, m_Extent, m_DepthFormat,
+      vk::ImageUsageFlagBits::eDepthStencilAttachment,
+      vk::ImageAspectFlagBits::eDepth);
+}
+
+vk::Format VulkanSwapchain::FindDepthFormat() {
+  std::vector<vk::Format> candidates = {vk::Format::eD32Sfloat,
+                                        vk::Format::eD32SfloatS8Uint,
+                                        vk::Format::eD24UnormS8Uint};
+
+  for (vk::Format format : candidates) {
+    vk::FormatProperties props =
+        m_Device->GetPhysicalDevice().getFormatProperties(format);
+
+    if (props.optimalTilingFeatures &
+        vk::FormatFeatureFlagBits::eDepthStencilAttachment) {
+      return format;
+    }
+  }
+
+  throw std::runtime_error("failed to find supported format!");
 }
 
 SwapchainSupportDetails

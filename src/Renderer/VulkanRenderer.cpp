@@ -10,27 +10,27 @@ namespace mc {
 VulkanRenderer::VulkanRenderer(VulkanContext &context) : m_Context(context) {
   CreateCommandBuffers();
   CreateSyncObjects();
+  CreateDescriptors();
+  CreateUboBuffers();
 }
 
 VulkanRenderer::~VulkanRenderer() {
   MC_DEBUG("VulkanRenderer destructor: Starting cleanup");
-  
+
   vk::Device device = m_Context.GetDevice()->GetLogicalDevice();
 
-  // Wait for all operations to complete before cleanup
-  MC_DEBUG("VulkanRenderer: Waiting for device idle...");
   device.waitIdle();
 
-  // Explicitly clear command buffers BEFORE destroying sync objects
-  // This ensures proper destruction order and prevents heap corruption
-  MC_DEBUG("VulkanRenderer: Clearing {} command buffers", m_CommandBuffers.size());
   m_CommandBuffers.clear();
+  m_UboBuffers.clear();
 
-  // Destroy synchronization primitives
-  MC_DEBUG("VulkanRenderer: Destroying {} semaphores and {} fences", 
-           m_ImageAvailableSemaphores.size() + m_RenderFinishedSemaphores.size(),
-           m_InFlightFences.size());
-           
+  if (m_DescriptorPool) {
+    device.destroyDescriptorPool(m_DescriptorPool);
+  }
+  if (m_GlobalDescriptorSetLayout) {
+    device.destroyDescriptorSetLayout(m_GlobalDescriptorSetLayout);
+  }
+
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
     if (m_ImageAvailableSemaphores[i]) {
       device.destroySemaphore(m_ImageAvailableSemaphores[i]);
@@ -45,7 +45,7 @@ VulkanRenderer::~VulkanRenderer() {
       device.destroySemaphore(sem);
     }
   }
-  
+
   MC_DEBUG("VulkanRenderer destructor: Cleanup completed");
 }
 
@@ -59,7 +59,6 @@ void VulkanRenderer::CreateSyncObjects() {
   uint32_t imageCount = m_Context.GetSwapchain()->GetImages().size();
   m_RenderFinishedSemaphores.resize(imageCount);
   m_InFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
-  m_ImagesInFlight.resize(imageCount, nullptr);
 
   vk::SemaphoreCreateInfo semaphoreInfo;
   vk::FenceCreateInfo fenceInfo;
@@ -87,6 +86,84 @@ void VulkanRenderer::CreateSyncObjects() {
       throw std::runtime_error("failed to create sync objects for a frame!");
     }
   }
+}
+
+void VulkanRenderer::CreateDescriptors() {
+  vk::DescriptorSetLayoutBinding uboLayoutBinding{};
+  uboLayoutBinding.binding = 0;
+  uboLayoutBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
+  uboLayoutBinding.descriptorCount = 1;
+  uboLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eVertex;
+
+  vk::DescriptorSetLayoutCreateInfo layoutInfo{};
+  layoutInfo.bindingCount = 1;
+  layoutInfo.pBindings = &uboLayoutBinding;
+
+  m_GlobalDescriptorSetLayout =
+      m_Context.GetDevice()->GetLogicalDevice().createDescriptorSetLayout(
+          layoutInfo);
+
+  std::vector<vk::DescriptorPoolSize> poolSizes = {
+      {vk::DescriptorType::eUniformBuffer,
+       static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT)}};
+
+  vk::DescriptorPoolCreateInfo poolInfo{};
+  poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+  poolInfo.pPoolSizes = poolSizes.data();
+  poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+  m_DescriptorPool =
+      m_Context.GetDevice()->GetLogicalDevice().createDescriptorPool(poolInfo);
+}
+
+void VulkanRenderer::CreateUboBuffers() {
+  m_UboBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+  for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    m_UboBuffers[i] = std::make_unique<VulkanBuffer>(
+        m_Context.GetAllocator()->GetAllocator(), sizeof(GlobalUbo), 1,
+        vk::BufferUsageFlagBits::eUniformBuffer, VMA_MEMORY_USAGE_AUTO,
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+            VMA_ALLOCATION_CREATE_MAPPED_BIT,
+        m_Context.GetDevice()
+            ->GetPhysicalDevice()
+            .getProperties()
+            .limits.minUniformBufferOffsetAlignment);
+    m_UboBuffers[i]->Map();
+  }
+
+  std::vector<vk::DescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT,
+                                               m_GlobalDescriptorSetLayout);
+  vk::DescriptorSetAllocateInfo allocInfo{};
+  allocInfo.descriptorPool = m_DescriptorPool;
+  allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+  allocInfo.pSetLayouts = layouts.data();
+
+  // Handle Vulkan-HPP result value or direct vector
+  m_GlobalDescriptorSets =
+      m_Context.GetDevice()->GetLogicalDevice().allocateDescriptorSets(
+          allocInfo);
+
+  for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    vk::DescriptorBufferInfo bufferInfo{};
+    bufferInfo.buffer = m_UboBuffers[i]->GetBuffer();
+    bufferInfo.offset = 0;
+    bufferInfo.range = sizeof(GlobalUbo);
+
+    vk::WriteDescriptorSet descriptorWrite{};
+    descriptorWrite.dstSet = m_GlobalDescriptorSets[i];
+    descriptorWrite.dstBinding = 0;
+    descriptorWrite.dstArrayElement = 0;
+    descriptorWrite.descriptorType = vk::DescriptorType::eUniformBuffer;
+    descriptorWrite.descriptorCount = 1;
+    descriptorWrite.pBufferInfo = &bufferInfo;
+
+    m_Context.GetDevice()->GetLogicalDevice().updateDescriptorSets(
+        1, &descriptorWrite, 0, nullptr);
+  }
+}
+
+void VulkanRenderer::UpdateGlobalUbo(const GlobalUbo &ubo) {
+  m_UboBuffers[m_CurrentFrameIndex]->WriteToBuffer((void *)&ubo);
 }
 
 vk::CommandBuffer VulkanRenderer::BeginFrame() {
@@ -118,7 +195,6 @@ vk::CommandBuffer VulkanRenderer::BeginFrame() {
   }
 
   if (result == vk::Result::eErrorOutOfDateKHR) {
-    // Requires swapchain recreation.
     m_Context.GetSwapchain()->Recreate();
     return nullptr;
   } else if (result != vk::Result::eSuccess &&
@@ -127,24 +203,11 @@ vk::CommandBuffer VulkanRenderer::BeginFrame() {
     throw std::runtime_error("failed to acquire swapchain image!");
   }
 
-  // Check if a previous frame is using this image (i.e. there is its fence to
-  // wait on)
-  if (m_ImagesInFlight[m_CurrentImageIndex]) {
-    if (device.waitForFences(1, &m_ImagesInFlight[m_CurrentImageIndex], VK_TRUE,
-                             UINT64_MAX) != vk::Result::eSuccess) {
-      MC_CRITICAL("Wait for fences (image in flight) failed");
-    }
-  }
-
-  // Mark the image as now being in use by this frame
-  m_ImagesInFlight[m_CurrentImageIndex] = m_InFlightFences[m_CurrentFrameIndex];
-
   (void)device.resetFences(1, &m_InFlightFences[m_CurrentFrameIndex]);
 
   auto commandBuffer =
       m_CommandBuffers[m_CurrentFrameIndex]->GetCommandBuffer();
 
-  // Begin command buffer
   m_CommandBuffers[m_CurrentFrameIndex]->Reset();
   m_CommandBuffers[m_CurrentFrameIndex]->Begin();
 
@@ -161,7 +224,6 @@ void VulkanRenderer::EndFrame() {
   auto commandBuffer =
       m_CommandBuffers[m_CurrentFrameIndex]->GetCommandBuffer();
 
-  // End command buffer
   m_CommandBuffers[m_CurrentFrameIndex]->End();
 
   vk::SubmitInfo submitInfo;
@@ -231,42 +293,61 @@ void VulkanRenderer::BeginRenderPass(vk::CommandBuffer commandBuffer) {
   colorAttachment.clearValue.color =
       vk::ClearColorValue(std::array<float, 4>{0.01f, 0.01f, 0.01f, 1.0f});
 
+  vk::RenderingAttachmentInfo depthAttachment;
+  depthAttachment.imageView = m_Context.GetSwapchain()->GetDepthImageView();
+  depthAttachment.imageLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
+  depthAttachment.loadOp = vk::AttachmentLoadOp::eClear;
+  depthAttachment.storeOp = vk::AttachmentStoreOp::eStore;
+  depthAttachment.clearValue.depthStencil = vk::ClearDepthStencilValue{1.0f, 0};
+
   vk::RenderingInfo renderingInfo;
   renderingInfo.renderArea.offset = vk::Offset2D{0, 0};
   renderingInfo.renderArea.extent = m_Context.GetSwapchain()->GetExtent();
   renderingInfo.layerCount = 1;
   renderingInfo.colorAttachmentCount = 1;
   renderingInfo.pColorAttachments = &colorAttachment;
+  renderingInfo.pDepthAttachment = &depthAttachment;
 
-  // Dynamic Rendering layout transitions - wait, we must transition the image
-  // layout! BUT we also need to use dynamic rendering correctly. Oh, we need
-  // image layout transitions. Actually, later in pipeline or frame logic we add
-  // full image barriers. For now, let vk::CommandBuffer::beginRendering handle
-  // the rendering info. Note: if there's no render pass, the developer is
-  // expected to transition image to eColorAttachmentOptimal before rendering!
+  // Image layout transitions
+  vk::ImageMemoryBarrier colorBarrier;
+  colorBarrier.oldLayout = vk::ImageLayout::eUndefined;
+  colorBarrier.newLayout = vk::ImageLayout::eColorAttachmentOptimal;
+  colorBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  colorBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  colorBarrier.image =
+      m_Context.GetSwapchain()->GetImages()[m_CurrentImageIndex];
+  colorBarrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+  colorBarrier.subresourceRange.baseMipLevel = 0;
+  colorBarrier.subresourceRange.levelCount = 1;
+  colorBarrier.subresourceRange.baseArrayLayer = 0;
+  colorBarrier.subresourceRange.layerCount = 1;
+  colorBarrier.srcAccessMask = vk::AccessFlags{};
+  colorBarrier.dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
 
-  vk::ImageMemoryBarrier barrier;
-  barrier.oldLayout = vk::ImageLayout::eUndefined;
-  barrier.newLayout = vk::ImageLayout::eColorAttachmentOptimal;
-  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  barrier.image = m_Context.GetSwapchain()->GetImages()[m_CurrentImageIndex];
-  barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
-  barrier.subresourceRange.baseMipLevel = 0;
-  barrier.subresourceRange.levelCount = 1;
-  barrier.subresourceRange.baseArrayLayer = 0;
-  barrier.subresourceRange.layerCount = 1;
-  barrier.srcAccessMask = vk::AccessFlags{};
-  barrier.dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
+  vk::ImageMemoryBarrier depthBarrier;
+  depthBarrier.oldLayout = vk::ImageLayout::eUndefined;
+  depthBarrier.newLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
+  depthBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  depthBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  depthBarrier.image = m_Context.GetSwapchain()->GetDepthImage();
+  depthBarrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
+  depthBarrier.subresourceRange.baseMipLevel = 0;
+  depthBarrier.subresourceRange.levelCount = 1;
+  depthBarrier.subresourceRange.baseArrayLayer = 0;
+  depthBarrier.subresourceRange.layerCount = 1;
+  depthBarrier.srcAccessMask = vk::AccessFlags{};
+  depthBarrier.dstAccessMask = vk::AccessFlagBits::eDepthStencilAttachmentWrite;
+
+  vk::ImageMemoryBarrier barriers[] = {colorBarrier, depthBarrier};
 
   commandBuffer.pipelineBarrier(
       vk::PipelineStageFlagBits::eTopOfPipe,
-      vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::DependencyFlags{},
-      nullptr, nullptr, barrier);
+      vk::PipelineStageFlagBits::eColorAttachmentOutput |
+          vk::PipelineStageFlagBits::eEarlyFragmentTests,
+      vk::DependencyFlags{}, nullptr, nullptr, barriers);
 
   commandBuffer.beginRendering(renderingInfo);
 
-  // Set Viewport and Scissor for dynamic states
   vk::Viewport viewport;
   viewport.x = 0.0f;
   viewport.y = 0.0f;
@@ -287,7 +368,6 @@ void VulkanRenderer::BeginRenderPass(vk::CommandBuffer commandBuffer) {
 void VulkanRenderer::EndRenderPass(vk::CommandBuffer commandBuffer) {
   commandBuffer.endRendering();
 
-  // Transition image back to PRESENT layout
   vk::ImageMemoryBarrier barrier;
   barrier.oldLayout = vk::ImageLayout::eColorAttachmentOptimal;
   barrier.newLayout = vk::ImageLayout::ePresentSrcKHR;
@@ -308,24 +388,20 @@ void VulkanRenderer::EndRenderPass(vk::CommandBuffer commandBuffer) {
       nullptr, barrier);
 }
 
-void VulkanRenderer::Draw(vk::CommandBuffer commandBuffer,
-                          VulkanPipeline &pipeline, vk::Buffer vertexBuffer,
-                          vk::Buffer indexBuffer, uint32_t indexCount) {
-  commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
-                             pipeline.GetPipeline());
-
-  vk::Buffer vertexBuffers[] = {vertexBuffer};
-  vk::DeviceSize offsets[] = {0};
-  commandBuffer.bindVertexBuffers(0, 1, vertexBuffers, offsets);
-  commandBuffer.bindIndexBuffer(indexBuffer, 0, vk::IndexType::eUint32);
-
-  commandBuffer.drawIndexed(indexCount, 1, 0, 0, 0);
-}
-
 void VulkanRenderer::DrawMesh(vk::CommandBuffer commandBuffer,
-                              VulkanPipeline &pipeline, VulkanMesh &mesh) {
+                              VulkanPipeline &pipeline, VulkanMesh &mesh,
+                              const PushConstantData &pushData) {
   commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
                              pipeline.GetPipeline());
+
+  commandBuffer.bindDescriptorSets(
+      vk::PipelineBindPoint::eGraphics, pipeline.GetPipelineLayout(), 0, 1,
+      &m_GlobalDescriptorSets[m_CurrentFrameIndex], 0, nullptr);
+
+  commandBuffer.pushConstants(pipeline.GetPipelineLayout(),
+                              vk::ShaderStageFlagBits::eVertex, 0,
+                              sizeof(PushConstantData), &pushData);
+
   mesh.Bind(commandBuffer);
   mesh.Draw(commandBuffer);
 }

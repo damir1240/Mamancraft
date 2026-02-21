@@ -5,10 +5,8 @@
 #include "Mamancraft/Renderer/VulkanContext.hpp"
 
 #include <SDL3/SDL_assert.h>
-
+#include <chrono>
 #include <stdexcept>
-
-// SDL Assertion Handling is kept default for stability
 
 namespace mc {
 
@@ -39,6 +37,7 @@ void Application::Init() {
   }
 
   m_VulkanContext = std::make_unique<VulkanContext>(m_Window);
+  m_Renderer = std::make_unique<VulkanRenderer>(*m_VulkanContext);
   m_AssetManager = std::make_unique<AssetManager>(*m_VulkanContext);
   m_InputManager = std::make_unique<InputManager>();
 
@@ -54,8 +53,6 @@ void Application::Init() {
   // Load User Configuration (Overrides Defaults)
   std::string configPath = (FileSystem::GetConfigDir() / "input.cfg").string();
   m_InputManager->LoadConfiguration(configPath);
-
-  // Save current configuration back to ensure the file exists and is up to date
   m_InputManager->SaveConfiguration(configPath);
 
   // Load resources via handles (Best Practice)
@@ -66,8 +63,7 @@ void Application::Init() {
   auto fragShader = m_AssetManager->GetShader(fragHandle);
 
   if (!vertShader || !fragShader) {
-    MC_CRITICAL(
-        "Required shaders failed to load! Check your assets directory.");
+    MC_CRITICAL("Required shaders failed to load!");
     throw std::runtime_error("Required shaders failed to load");
   }
 
@@ -75,19 +71,35 @@ void Application::Init() {
   VulkanPipeline::DefaultPipelineConfigInfo(pipelineConfig);
   pipelineConfig.colorAttachmentFormat =
       m_VulkanContext->GetSwapchain()->GetImageFormat();
+  pipelineConfig.depthAttachmentFormat =
+      m_VulkanContext->GetSwapchain()->GetDepthFormat();
+
+  pipelineConfig.descriptorSetLayouts = {
+      m_Renderer->GetGlobalDescriptorSetLayout()};
+
+  vk::PushConstantRange pushConstantRange{};
+  pushConstantRange.stageFlags = vk::ShaderStageFlagBits::eVertex;
+  pushConstantRange.offset = 0;
+  pushConstantRange.size = sizeof(PushConstantData);
+  pipelineConfig.pushConstantRanges = {pushConstantRange};
 
   m_Pipeline = std::make_unique<VulkanPipeline>(
       m_VulkanContext->GetDevice(), *vertShader, *fragShader, pipelineConfig);
-  m_Renderer = std::make_unique<VulkanRenderer>(*m_VulkanContext);
 
   VulkanMesh::Builder meshBuilder;
-  meshBuilder.vertices = {{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-                          {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-                          {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-                          {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}};
+  // 3D Cube-like triangle or quad
+  meshBuilder.vertices = {{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+                          {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}},
+                          {{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+                          {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}}};
   meshBuilder.indices = {0, 1, 2, 2, 3, 0};
 
   m_TriangleMesh = m_AssetManager->CreateMesh("triangle", meshBuilder);
+
+  m_Camera.SetPosition({0.0f, 0.0f, 2.0f});
+  m_Camera.SetPerspective(glm::radians(45.0f),
+                          (float)m_Config.width / (float)m_Config.height, 0.1f,
+                          100.0f);
 
   m_IsRunning = true;
   MC_INFO("Application initialized successfully.");
@@ -96,110 +108,105 @@ void Application::Init() {
 void Application::Shutdown() {
   MC_INFO("Application::Shutdown() - Starting shutdown sequence");
 
-  // CRITICAL ORDER: Destroy objects that use VMA allocator BEFORE VulkanContext
-
-  // 1. Renderer (contains command buffers and sync objects)
-  if (m_Renderer) {
-    MC_DEBUG("Application: Destroying renderer...");
+  if (m_Renderer)
     m_Renderer.reset();
-  }
-
-  // 2. Pipeline (contains shader modules)
-  if (m_Pipeline) {
-    MC_DEBUG("Application: Destroying pipeline...");
+  if (m_Pipeline)
     m_Pipeline.reset();
-  }
-
-  // 3. AssetManager - MUST be cleared before VulkanContext
-  //    because meshes contain VulkanBuffers that use VMA allocator
   if (m_AssetManager) {
-    MC_DEBUG("Application: Clearing AssetManager (contains VMA-allocated "
-             "buffers)...");
-    m_AssetManager->Clear(); // Explicitly clear caches to free VMA allocations
-    MC_DEBUG("Application: Destroying AssetManager...");
-    m_AssetManager.reset(); // Destructor will check if already cleared
+    m_AssetManager->Clear();
+    m_AssetManager.reset();
   }
-
-  // 4. VulkanContext (contains VMA allocator - destroyed last among Vulkan
-  // objects)
-  if (m_VulkanContext) {
-    MC_DEBUG("Application: Destroying VulkanContext (will destroy VMA "
-             "allocator)...");
+  if (m_VulkanContext)
     m_VulkanContext.reset();
-  }
-
-  // 6. InputManager
-  if (m_InputManager) {
-    MC_DEBUG("Application: Destroying InputManager...");
+  if (m_InputManager)
     m_InputManager.reset();
-  }
-
-  // 7. SDL Window
   if (m_Window) {
-    MC_DEBUG("Application: Destroying SDL window...");
     SDL_DestroyWindow(m_Window);
     m_Window = nullptr;
   }
-
-  // NOTE: SDL_Quit() is intentionally omitted here.
-  // It must be called AFTER the Application object is fully destroyed (in
-  // main.cpp). This prevents crashes where SDL unloads DLLs/memory hooks while
-  // C++ objects (like std::string in m_Config) are still being destroyed.
-
-  MC_INFO("Application::Shutdown() - Shutdown completed successfully");
 }
 
 void Application::ProcessEvents() {
   SDL_Event event;
   while (SDL_PollEvent(&event)) {
     m_InputManager->HandleEvent(event);
-
-    if (event.type == SDL_EVENT_QUIT) {
-      MC_INFO("Quit event received. Stopping application.");
+    if (event.type == SDL_EVENT_QUIT)
       m_IsRunning = false;
-    }
-
     if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
         event.window.windowID == SDL_GetWindowID(m_Window)) {
-      MC_INFO("Window close request received.");
       m_IsRunning = false;
+    }
+    if (event.type == SDL_EVENT_WINDOW_RESIZED) {
+      m_Camera.SetPerspective(
+          glm::radians(45.0f),
+          (float)event.window.data1 / (float)event.window.data2, 0.1f, 100.0f);
     }
   }
 }
 
-void Application::Update() {
-  if (m_InputManager->IsActionPressed("Menu")) {
-    MC_INFO("Menu Action triggered. Stopping application.");
+void Application::Update(float dt) {
+  if (m_InputManager->IsActionPressed("Menu"))
     m_IsRunning = false;
-  }
 
-  // Toggle cursor locking with 'M' key
   if (m_InputManager->IsKeyPressed(SDL_SCANCODE_M)) {
     m_InputManager->SetCursorLocking(m_Window,
                                      !m_InputManager->IsCursorLocked());
   }
 
+  float moveSpeed = 5.0f * dt;
+  glm::vec3 pos = m_Camera.GetPosition();
+  glm::vec3 rot = m_Camera.GetRotation();
+
+  if (m_InputManager->IsActionHeld("MoveForward"))
+    pos.z -= moveSpeed;
+  if (m_InputManager->IsActionHeld("MoveBackward"))
+    pos.z += moveSpeed;
+  if (m_InputManager->IsActionHeld("MoveLeft"))
+    pos.x -= moveSpeed;
+  if (m_InputManager->IsActionHeld("MoveRight"))
+    pos.x += moveSpeed;
+  if (m_InputManager->IsActionHeld("Jump"))
+    pos.y += moveSpeed;
+
   if (m_InputManager->IsCursorLocked()) {
     glm::vec2 delta = m_InputManager->GetMouseDelta();
-    if (glm::length(delta) > 0.0f) {
-      // Future: Update camera rotation here
-    }
+    rot.y -= delta.x * 0.1f;
+    rot.x -= delta.y * 0.1f;
+    rot.x = glm::clamp(rot.x, -89.0f, 89.0f);
   }
+
+  m_Camera.SetPosition(pos);
+  m_Camera.SetRotation(rot);
+  m_Camera.Update();
 }
 
 void Application::Run() {
   MC_INFO("Starting main loop.");
+  auto lastTime = std::chrono::high_resolution_clock::now();
+
   while (m_IsRunning) {
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    float dt = std::chrono::duration<float, std::chrono::seconds::period>(
+                   currentTime - lastTime)
+                   .count();
+    lastTime = currentTime;
+
     m_InputManager->NewFrame();
     ProcessEvents();
-    Update();
+    Update(dt);
 
     if (auto commandBuffer = m_Renderer->BeginFrame()) {
+      GlobalUbo ubo{};
+      ubo.projection = m_Camera.GetProjection();
+      ubo.view = m_Camera.GetView();
+      m_Renderer->UpdateGlobalUbo(ubo);
+
       m_Renderer->BeginRenderPass(commandBuffer);
 
-      // Draw using handles
       if (auto mesh = m_AssetManager->GetMesh(m_TriangleMesh)) {
-        m_Renderer->DrawMesh(commandBuffer, *m_Pipeline, *mesh);
+        PushConstantData push{};
+        push.model = glm::mat4(1.0f); // Static triangle for now
+        m_Renderer->DrawMesh(commandBuffer, *m_Pipeline, *mesh, push);
       }
 
       m_Renderer->EndRenderPass(commandBuffer);

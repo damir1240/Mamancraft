@@ -10,13 +10,12 @@ public:
   VulkanBuffer(VmaAllocator allocator, vk::DeviceSize instanceSize,
                uint32_t instanceCount, vk::BufferUsageFlags usageFlags,
                VmaMemoryUsage memoryUsage,
+               VmaAllocationCreateFlags allocationFlags = 0,
                vk::DeviceSize minOffsetAlignment = 1);
   ~VulkanBuffer();
 
   VulkanBuffer(const VulkanBuffer &) = delete;
   VulkanBuffer &operator=(const VulkanBuffer &) = delete;
-  VulkanBuffer(VulkanBuffer &&) = delete;
-  VulkanBuffer &operator=(VulkanBuffer &&) = delete;
 
   vk::Result Map();
   void Unmap();
@@ -28,7 +27,7 @@ public:
                         vk::DeviceSize offset = 0);
 
   vk::Buffer GetBuffer() const { return m_Buffer; }
-  void *GetMappedMemory() const { return m_MappedRegion; }
+  void *GetMappedRegion() const { return m_MappedRegion; }
   uint32_t GetInstanceCount() const { return m_InstanceCount; }
   vk::DeviceSize GetInstanceSize() const { return m_InstanceSize; }
   vk::DeviceSize GetAlignmentSize() const { return m_AlignmentSize; }
@@ -44,18 +43,18 @@ private:
 
 private:
   VmaAllocator m_Allocator;
-
-  void *m_MappedRegion = nullptr;
   vk::Buffer m_Buffer = nullptr;
   VmaAllocation m_Allocation = nullptr;
-  VmaAllocationInfo m_AllocationInfo{};
+  VmaAllocationInfo m_AllocationInfo;
+  void *m_MappedRegion = nullptr;
 
   vk::DeviceSize m_BufferSize;
-  uint32_t m_InstanceCount;
   vk::DeviceSize m_InstanceSize;
+  uint32_t m_InstanceCount;
   vk::DeviceSize m_AlignmentSize;
   vk::BufferUsageFlags m_UsageFlags;
   VmaMemoryUsage m_MemoryUsage;
+  VmaAllocationCreateFlags m_AllocationFlags;
 };
 
 } // namespace mc
