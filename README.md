@@ -6,7 +6,7 @@
 
 ## 🛠 Стэк технологий
 
-![C++](https://img.shields.io/badge/C++-%2300599C.svg?style=for-the-badge&logo=c%2B%2B&logoColor=white)
+![C++](https://img.shields.io/badge/C++-%2300599C.svg?style=for-the-badge&logo=c%2B%2B&logoColor=white) ![Vulkan](https://img.shields.io/badge/Vulkan_1.4-%23E02222.svg?style=for-the-badge&logo=vulkan&logoColor=white)
 
 ## 👤 Разработчик
 
