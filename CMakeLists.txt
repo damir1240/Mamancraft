@@ -23,6 +23,31 @@ add_subdirectory(external/vma EXCLUDE_FROM_ALL)
 file(GLOB_RECURSE MAMANCRAFT_ENGINE_SRCS "src/*.cpp")
 list(REMOVE_ITEM MAMANCRAFT_ENGINE_SRCS "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")
 
+# --- Shader Compilation ---
+find_program(GLSLC_EXECUTABLE NAMES glslc HINTS $ENV{VULKAN_SDK}/bin)
+if(NOT GLSLC_EXECUTABLE)
+    message(FATAL_ERROR "glslc not found! Please check VULKAN_SDK installation.")
+endif()
+
+file(GLOB_RECURSE SHADERS "assets/shaders/*.vert" "assets/shaders/*.frag")
+set(SPV_FILES "")
+
+foreach(SHADER ${SHADERS})
+    get_filename_component(FILE_NAME ${SHADER} NAME)
+    set(SPV_FILE "${CMAKE_BINARY_DIR}/shaders/${FILE_NAME}.spv")
+    add_custom_command(
+        OUTPUT ${SPV_FILE}
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/shaders"
+        COMMAND ${GLSLC_EXECUTABLE} ${SHADER} -o ${SPV_FILE}
+        DEPENDS ${SHADER}
+        COMMENT "Compiling shader ${FILE_NAME} to vulkan SPIR-V"
+    )
+    list(APPEND SPV_FILES ${SPV_FILE})
+endforeach()
+
+add_custom_target(MamancraftShaders ALL DEPENDS ${SPV_FILES})
+# --------------------------
+
 add_library(MamancraftEngine STATIC ${MAMANCRAFT_ENGINE_SRCS})
 target_include_directories(MamancraftEngine PUBLIC include)
 target_include_directories(MamancraftEngine PRIVATE external) # Для доступа к коренным папкам зависимостей если нужно
@@ -59,7 +84,7 @@ target_link_libraries(TestDeps PRIVATE
     GPUOpen::VulkanMemoryAllocator
 )
 
-add_executable(TestEngine tests/test_vulkan_init.cpp)
+add_executable(TestEngine tests/test_vulkan_init.cpp tests/test_vulkan_pipeline.cpp)
 target_link_libraries(TestEngine PRIVATE 
     MamancraftEngine
     GTest::gtest
@@ -70,6 +95,11 @@ add_custom_command(TARGET Mamancraft POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
     "$<TARGET_FILE:SDL3::SDL3-shared>"
     "$<TARGET_FILE_DIR:Mamancraft>"
+)
+add_custom_command(TARGET Mamancraft POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_BINARY_DIR}/shaders"
+    "$<TARGET_FILE_DIR:Mamancraft>/shaders"
 )
 
 add_custom_command(TARGET TestDeps POST_BUILD
@@ -82,4 +112,9 @@ add_custom_command(TARGET TestEngine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
     "$<TARGET_FILE:SDL3::SDL3-shared>"
     "$<TARGET_FILE_DIR:TestEngine>"
+)
+add_custom_command(TARGET TestEngine POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_BINARY_DIR}/shaders"
+    "$<TARGET_FILE_DIR:TestEngine>/shaders"
 )

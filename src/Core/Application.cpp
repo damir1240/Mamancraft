@@ -1,5 +1,6 @@
 #include "Mamancraft/Core/Application.hpp"
 #include "Mamancraft/Core/Logger.hpp"
+#include "Mamancraft/Renderer/Vulkan/VulkanShader.hpp"
 #include "Mamancraft/Renderer/VulkanContext.hpp"
 
 #include <stdexcept>
@@ -36,6 +37,22 @@ void Application::Init() {
 
   m_VulkanContext = std::make_unique<VulkanContext>(m_Window);
 
+  const char *basePath = SDL_GetBasePath();
+  std::string shadersPath = std::string(basePath ? basePath : "") + "shaders/";
+
+  VulkanShader vertShader(m_VulkanContext->GetDevice(),
+                          shadersPath + "triangle.vert.spv");
+  VulkanShader fragShader(m_VulkanContext->GetDevice(),
+                          shadersPath + "triangle.frag.spv");
+
+  PipelineConfigInfo pipelineConfig;
+  VulkanPipeline::DefaultPipelineConfigInfo(pipelineConfig);
+  pipelineConfig.renderPass = m_VulkanContext->GetRenderPass()->GetRenderPass();
+
+  m_Pipeline = std::make_unique<VulkanPipeline>(
+      m_VulkanContext->GetDevice(), vertShader, fragShader, pipelineConfig);
+  m_Renderer = std::make_unique<VulkanRenderer>(*m_VulkanContext);
+
   m_IsRunning = true;
   MC_INFO("Application initialized successfully.");
 }
@@ -43,6 +60,8 @@ void Application::Init() {
 void Application::Shutdown() {
   MC_INFO("Shutting down Application.");
 
+  m_Renderer.reset();
+  m_Pipeline.reset();
   m_VulkanContext.reset();
 
   if (m_Window) {
@@ -88,9 +107,12 @@ void Application::Run() {
     ProcessEvents();
     Update();
 
-    // Temporarily add a small delay to avoid 100% CPU usage until we have
-    // VSync/Vulkan rendering
-    SDL_Delay(16); // roughly 60 fps
+    if (auto commandBuffer = m_Renderer->BeginFrame()) {
+      m_Renderer->BeginRenderPass(commandBuffer);
+      m_Renderer->Draw(commandBuffer, *m_Pipeline);
+      m_Renderer->EndRenderPass(commandBuffer);
+      m_Renderer->EndFrame();
+    }
   }
 }
 
