@@ -41,10 +41,11 @@ private:
   bool m_IsRunning = false;
   SDL_Window *m_Window = nullptr;
   std::unique_ptr<VulkanContext> m_VulkanContext;
+  std::unique_ptr<AssetManager> m_AssetManager;
   std::unique_ptr<VulkanPipeline> m_Pipeline;
   std::unique_ptr<VulkanRenderer> m_Renderer;
-  std::unique_ptr<AssetManager> m_AssetManager;
-  std::shared_ptr<VulkanMesh> m_Mesh;
+
+  AssetHandle m_TriangleMesh = INVALID_HANDLE;
 };
 
 } // namespace mc

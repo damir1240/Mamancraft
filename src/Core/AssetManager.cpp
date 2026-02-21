@@ -2,66 +2,92 @@
 #include "Mamancraft/Core/Logger.hpp"
 #include "Mamancraft/Renderer/VulkanContext.hpp"
 
+
 #include <SDL3/SDL.h>
 
 namespace mc {
 
 AssetManager::AssetManager(VulkanContext &context) : m_Context(context) {
+  // In SDL3, SDL_GetBasePath returns a const char* that does NOT need to be
+  // freed. However, some versions might still return char*. Using const char*
+  // is safer.
   const char *basePath = SDL_GetBasePath();
   if (basePath) {
     m_BaseDir = std::filesystem::path(basePath);
+    // Note: SDL3 documentation states that for SDL_GetBasePath, you should NOT
+    // free the string. It returns a pointer to internal memory.
   } else {
     MC_WARN("SDL_GetBasePath failed, using current directory for assets.");
     m_BaseDir = std::filesystem::current_path();
   }
 
-  MC_INFO("AssetManager initialized. Base directory: {}", m_BaseDir.string());
+  MC_INFO("Modern AssetManager initialized. Base directory: {}",
+          m_BaseDir.string());
 }
 
-AssetManager::~AssetManager() {
-  MC_INFO("Shutting down AssetManager (clearing caches)");
-  m_ShaderCache.clear();
-  m_MeshCache.clear();
+AssetManager::~AssetManager() { Clear(); }
+
+void AssetManager::Clear() {
+  if (!m_ShaderCache.empty() || !m_MeshCache.empty()) {
+    MC_INFO("Clearing AssetManager caches (Best Practice Cleanup)");
+    // Clean order: meshes (which hold buffers) then shaders
+    m_MeshCache.clear();
+    m_ShaderCache.clear();
+    m_NameToHandle.clear();
+  }
 }
 
-std::shared_ptr<VulkanShader> AssetManager::GetShader(const std::string &name) {
-  if (m_ShaderCache.contains(name)) {
-    return m_ShaderCache[name];
+AssetHandle AssetManager::GenerateHandle(std::string_view name) {
+  return std::hash<std::string_view>{}(name);
+}
+
+AssetHandle AssetManager::LoadShader(std::string_view name) {
+  std::string sName(name);
+  if (m_NameToHandle.contains(sName)) {
+    return m_NameToHandle[sName];
   }
 
-  std::filesystem::path fullPath = GetFullPath(name);
+  AssetHandle handle = GenerateHandle(name);
+  std::filesystem::path fullPath = m_BaseDir / name;
 
   try {
-    MC_INFO("Loading shader: {}", fullPath.string());
     auto shader = std::make_shared<VulkanShader>(m_Context.GetDevice(),
                                                  fullPath.string());
-    m_ShaderCache[name] = shader;
-    return shader;
+    m_ShaderCache[handle] = shader;
+    m_NameToHandle[sName] = handle;
+    return handle;
   } catch (const std::exception &e) {
     MC_ERROR("Failed to load shader {}: {}", name, e.what());
-    return nullptr;
+    return INVALID_HANDLE;
   }
 }
 
-void AssetManager::AddMesh(const std::string &name,
-                           std::shared_ptr<VulkanMesh> mesh) {
-  if (m_MeshCache.contains(name)) {
-    MC_WARN("Overwriting existing mesh in cache: {}", name);
+std::shared_ptr<VulkanShader> AssetManager::GetShader(AssetHandle handle) {
+  auto it = m_ShaderCache.find(handle);
+  if (it != m_ShaderCache.end()) {
+    return it->second;
   }
-  m_MeshCache[name] = mesh;
-}
-
-std::shared_ptr<VulkanMesh> AssetManager::GetMesh(const std::string &name) {
-  if (m_MeshCache.contains(name)) {
-    return m_MeshCache[name];
-  }
-  MC_WARN("Mesh not found in cache: {}", name);
   return nullptr;
 }
 
-std::filesystem::path
-AssetManager::GetFullPath(const std::string &relativePath) const {
-  return m_BaseDir / relativePath;
+AssetHandle AssetManager::CreateMesh(std::string_view name,
+                                     const VulkanMesh::Builder &builder) {
+  std::string sName(name);
+  AssetHandle handle = GenerateHandle(name);
+
+  auto mesh = std::make_shared<VulkanMesh>(m_Context, builder);
+  m_MeshCache[handle] = mesh;
+  m_NameToHandle[sName] = handle;
+
+  return handle;
+}
+
+std::shared_ptr<VulkanMesh> AssetManager::GetMesh(AssetHandle handle) {
+  auto it = m_MeshCache.find(handle);
+  if (it != m_MeshCache.end()) {
+    return it->second;
+  }
+  return nullptr;
 }
 
 } // namespace mc

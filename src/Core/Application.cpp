@@ -20,7 +20,6 @@ void Application::Init() {
     throw std::runtime_error("SDL Initialization failed");
   }
 
-  // Prepare window flags. For Vulkan, we need SDL_WINDOW_VULKAN.
   SDL_WindowFlags windowFlags =
       (SDL_WindowFlags)(SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN |
                         SDL_WINDOW_HIGH_PIXEL_DENSITY);
@@ -38,8 +37,12 @@ void Application::Init() {
   m_VulkanContext = std::make_unique<VulkanContext>(m_Window);
   m_AssetManager = std::make_unique<AssetManager>(*m_VulkanContext);
 
-  auto vertShader = m_AssetManager->GetShader("shaders/triangle.vert.spv");
-  auto fragShader = m_AssetManager->GetShader("shaders/triangle.frag.spv");
+  // Load resources via handles (Best Practice)
+  auto vertHandle = m_AssetManager->LoadShader("shaders/triangle.vert.spv");
+  auto fragHandle = m_AssetManager->LoadShader("shaders/triangle.frag.spv");
+
+  auto vertShader = m_AssetManager->GetShader(vertHandle);
+  auto fragShader = m_AssetManager->GetShader(fragHandle);
 
   PipelineConfigInfo pipelineConfig;
   VulkanPipeline::DefaultPipelineConfigInfo(pipelineConfig);
@@ -51,16 +54,13 @@ void Application::Init() {
   m_Renderer = std::make_unique<VulkanRenderer>(*m_VulkanContext);
 
   VulkanMesh::Builder meshBuilder;
-  meshBuilder.vertices = {
-      {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}}, // Top Left
-      {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},  // Top Right
-      {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},   // Bottom Right
-      {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}   // Bottom Left
-  };
+  meshBuilder.vertices = {{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+                          {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+                          {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+                          {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}};
   meshBuilder.indices = {0, 1, 2, 2, 3, 0};
 
-  m_Mesh = std::make_shared<VulkanMesh>(*m_VulkanContext, meshBuilder);
-  m_AssetManager->AddMesh("triangle", m_Mesh);
+  m_TriangleMesh = m_AssetManager->CreateMesh("triangle", meshBuilder);
 
   m_IsRunning = true;
   MC_INFO("Application initialized successfully.");
@@ -69,10 +69,21 @@ void Application::Init() {
 void Application::Shutdown() {
   MC_INFO("Shutting down Application.");
 
+  // 1. Wait for GPU idle (Crucial Best Practice)
+  if (m_VulkanContext && m_VulkanContext->GetDevice()) {
+    m_VulkanContext->GetDevice()->GetLogicalDevice().waitIdle();
+  }
+
+  // 2. Destroy objects in reverse order of creation
   m_Renderer.reset();
   m_Pipeline.reset();
-  m_Mesh.reset();
-  m_VulkanContext.reset();
+
+  if (m_AssetManager) {
+    m_AssetManager->Clear(); // Explicitly clear caches to free VMA allocations
+    m_AssetManager.reset();
+  }
+
+  m_VulkanContext.reset(); // VMA allocator is safe to destroy now
 
   if (m_Window) {
     SDL_DestroyWindow(m_Window);
@@ -90,14 +101,12 @@ void Application::ProcessEvents() {
       m_IsRunning = false;
     }
 
-    // Handle window close event from the 'X' button
     if (event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED &&
         event.window.windowID == SDL_GetWindowID(m_Window)) {
       MC_INFO("Window close request received.");
       m_IsRunning = false;
     }
 
-    // Handle escape key to quit
     if (event.type == SDL_EVENT_KEY_DOWN) {
       if (event.key.scancode == SDL_SCANCODE_ESCAPE) {
         MC_INFO("Escape key pressed. Stopping application.");
@@ -119,7 +128,12 @@ void Application::Run() {
 
     if (auto commandBuffer = m_Renderer->BeginFrame()) {
       m_Renderer->BeginRenderPass(commandBuffer);
-      m_Renderer->DrawMesh(commandBuffer, *m_Pipeline, *m_Mesh);
+
+      // Draw using handles
+      if (auto mesh = m_AssetManager->GetMesh(m_TriangleMesh)) {
+        m_Renderer->DrawMesh(commandBuffer, *m_Pipeline, *mesh);
+      }
+
       m_Renderer->EndRenderPass(commandBuffer);
       m_Renderer->EndFrame();
     }
