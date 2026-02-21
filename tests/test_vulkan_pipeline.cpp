@@ -1,4 +1,5 @@
 #include "Mamancraft/Core/Logger.hpp"
+#include "Mamancraft/Renderer/Vulkan/VulkanMesh.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanPipeline.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanShader.hpp"
 #include "Mamancraft/Renderer/VulkanContext.hpp"
@@ -89,4 +90,14 @@ TEST_F(VulkanPipelineTest, CreateVulkanPipeline) {
 
 TEST_F(VulkanPipelineTest, CreateVulkanRenderer) {
   EXPECT_NO_THROW({ mc::VulkanRenderer renderer(*context); });
+}
+
+TEST_F(VulkanPipelineTest, CreateVulkanMesh) {
+  mc::VulkanMesh::Builder builder;
+  builder.vertices = {{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+                      {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+                      {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}};
+  builder.indices = {0, 1, 2};
+
+  EXPECT_NO_THROW({ mc::VulkanMesh mesh(*context, builder); });
 }
