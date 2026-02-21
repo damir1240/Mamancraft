@@ -14,7 +14,17 @@ AssetManager::AssetManager(VulkanContext &context) : m_Context(context) {
           m_BaseDir.string());
 }
 
-AssetManager::~AssetManager() { Clear(); }
+AssetManager::~AssetManager() {
+  MC_DEBUG("AssetManager destructor: Checking if cleanup needed");
+  // Clear() may have been called explicitly before destruction
+  // Only clear if there are still resources
+  if (!m_ShaderCache.empty() || !m_MeshCache.empty()) {
+    MC_WARN("AssetManager destructor: Resources still exist! Calling Clear()");
+    Clear();
+  } else {
+    MC_DEBUG("AssetManager destructor: Already cleaned up, skipping");
+  }
+}
 
 void AssetManager::Clear() {
   if (!m_ShaderCache.empty() || !m_MeshCache.empty()) {
@@ -24,18 +34,24 @@ void AssetManager::Clear() {
     
     // CRITICAL: Clear meshes FIRST (they contain VulkanBuffers that use VMA)
     // This must happen BEFORE VulkanContext destroys the VMA allocator
-    MC_DEBUG("AssetManager: Clearing mesh cache...");
-    m_MeshCache.clear();
+    if (!m_MeshCache.empty()) {
+      MC_DEBUG("AssetManager: Clearing mesh cache...");
+      m_MeshCache.clear();
+    }
     
-    MC_DEBUG("AssetManager: Clearing shader cache...");
-    m_ShaderCache.clear();
+    if (!m_ShaderCache.empty()) {
+      MC_DEBUG("AssetManager: Clearing shader cache...");
+      m_ShaderCache.clear();
+    }
     
-    MC_DEBUG("AssetManager: Clearing name-to-handle map...");
-    m_NameToHandle.clear();
+    if (!m_NameToHandle.empty()) {
+      MC_DEBUG("AssetManager: Clearing name-to-handle map...");
+      m_NameToHandle.clear();
+    }
     
     MC_INFO("AssetManager::Clear() - Cleanup completed");
   } else {
-    MC_DEBUG("AssetManager::Clear() - No assets to clear");
+    MC_DEBUG("AssetManager::Clear() - No assets to clear (already cleaned)");
   }
 }
 
