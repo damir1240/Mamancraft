@@ -36,6 +36,15 @@ void Application::Init() {
 
   m_VulkanContext = std::make_unique<VulkanContext>(m_Window);
   m_AssetManager = std::make_unique<AssetManager>(*m_VulkanContext);
+  m_InputManager = std::make_unique<InputManager>();
+
+  // Default Key Bindings
+  m_InputManager->BindAction("Jump", SDL_SCANCODE_SPACE);
+  m_InputManager->BindAction("MoveForward", SDL_SCANCODE_W);
+  m_InputManager->BindAction("MoveBackward", SDL_SCANCODE_S);
+  m_InputManager->BindAction("MoveLeft", SDL_SCANCODE_A);
+  m_InputManager->BindAction("MoveRight", SDL_SCANCODE_D);
+  m_InputManager->BindMouseButton("Interact", SDL_BUTTON_LEFT);
 
   // Load resources via handles (Best Practice)
   auto vertHandle = m_AssetManager->LoadShader("shaders/triangle.vert.spv");
@@ -90,12 +99,15 @@ void Application::Shutdown() {
     m_Window = nullptr;
   }
 
+  m_InputManager.reset();
   SDL_Quit();
 }
 
 void Application::ProcessEvents() {
   SDL_Event event;
   while (SDL_PollEvent(&event)) {
+    m_InputManager->HandleEvent(event);
+
     if (event.type == SDL_EVENT_QUIT) {
       MC_INFO("Quit event received. Stopping application.");
       m_IsRunning = false;
@@ -106,23 +118,33 @@ void Application::ProcessEvents() {
       MC_INFO("Window close request received.");
       m_IsRunning = false;
     }
-
-    if (event.type == SDL_EVENT_KEY_DOWN) {
-      if (event.key.scancode == SDL_SCANCODE_ESCAPE) {
-        MC_INFO("Escape key pressed. Stopping application.");
-        m_IsRunning = false;
-      }
-    }
   }
 }
 
 void Application::Update() {
-  // Core logic update here
+  if (m_InputManager->IsKeyPressed(SDL_SCANCODE_ESCAPE)) {
+    MC_INFO("Escape key pressed. Stopping application.");
+    m_IsRunning = false;
+  }
+
+  // Toggle cursor locking with 'M' key
+  if (m_InputManager->IsKeyPressed(SDL_SCANCODE_M)) {
+    m_InputManager->SetCursorLocking(m_Window,
+                                     !m_InputManager->IsCursorLocked());
+  }
+
+  if (m_InputManager->IsCursorLocked()) {
+    glm::vec2 delta = m_InputManager->GetMouseDelta();
+    if (glm::length(delta) > 0.0f) {
+      // Future: Update camera rotation here
+    }
+  }
 }
 
 void Application::Run() {
   MC_INFO("Starting main loop.");
   while (m_IsRunning) {
+    m_InputManager->NewFrame();
     ProcessEvents();
     Update();
 

@@ -7,6 +7,7 @@
 #include <string>
 
 #include "Mamancraft/Core/AssetManager.hpp"
+#include "Mamancraft/Core/InputManager.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanMesh.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanPipeline.hpp"
 #include "Mamancraft/Renderer/VulkanContext.hpp"
@@ -42,6 +43,7 @@ private:
   SDL_Window *m_Window = nullptr;
   std::unique_ptr<VulkanContext> m_VulkanContext;
   std::unique_ptr<AssetManager> m_AssetManager;
+  std::unique_ptr<InputManager> m_InputManager;
   std::unique_ptr<VulkanPipeline> m_Pipeline;
   std::unique_ptr<VulkanRenderer> m_Renderer;
 
