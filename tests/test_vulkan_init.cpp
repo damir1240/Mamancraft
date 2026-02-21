@@ -13,7 +13,8 @@ protected:
 
     m_Window = SDL_CreateWindow("Test Window", 800, 600,
                                 SDL_WINDOW_VULKAN | SDL_WINDOW_HIDDEN);
-    ASSERT_NE(m_Window, nullptr);
+    ASSERT_NE(m_Window, nullptr)
+        << "SDL_CreateWindow failed: " << SDL_GetError();
   }
 
   void TearDown() override {
@@ -43,8 +44,8 @@ TEST_F(VulkanContextTest, InitializationPhases) {
   // Phase 3: Swapchain
   ASSERT_NE(context->GetSwapchain(), nullptr);
   EXPECT_NE(context->GetSwapchain()->GetSwapchain(), VK_NULL_HANDLE);
-  EXPECT_GT(context->GetSwapchain()->GetImages().size(), 0);
-  EXPECT_GT(context->GetSwapchain()->GetImageViews().size(), 0);
+  EXPECT_TRUE(!context->GetSwapchain()->GetImages().empty());
+  EXPECT_TRUE(!context->GetSwapchain()->GetImageViews().empty());
 
   // Phase 4: Allocator & Commands
   ASSERT_NE(context->GetAllocator(), nullptr);
