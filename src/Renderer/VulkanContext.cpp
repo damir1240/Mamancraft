@@ -61,6 +61,8 @@ void VulkanContext::Init() {
   PickPhysicalDevice();
   CreateLogicalDevice();
   CreateSwapchain();
+  CreateRenderPass();
+  CreateFramebuffers();
   CreateAllocator();
   CreateCommandPool();
 }
@@ -70,6 +72,8 @@ void VulkanContext::Shutdown() {
 
   m_CommandPool.reset();
   m_Allocator.reset();
+  m_Framebuffers.clear();
+  m_RenderPass.reset();
   m_Swapchain.reset();
   m_Device.reset();
 
@@ -379,6 +383,23 @@ void VulkanContext::CreateCommandPool() {
   m_CommandPool = std::make_unique<VulkanCommandPool>(
       m_Device, graphicsQueueFamily,
       VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+}
+
+void VulkanContext::CreateRenderPass() {
+  m_RenderPass = std::make_unique<VulkanRenderPass>(
+      m_Device, m_Swapchain->GetImageFormat());
+}
+
+void VulkanContext::CreateFramebuffers() {
+  m_Framebuffers.clear();
+  auto swapChainExtent = m_Swapchain->GetExtent();
+  const auto &imageViews = m_Swapchain->GetImageViews();
+
+  for (size_t i = 0; i < imageViews.size(); i++) {
+    std::vector<VkImageView> attachments = {imageViews[i]};
+    m_Framebuffers.push_back(std::make_unique<VulkanFramebuffer>(
+        m_Device, m_RenderPass->GetRenderPass(), attachments, swapChainExtent));
+  }
 }
 
 } // namespace mc

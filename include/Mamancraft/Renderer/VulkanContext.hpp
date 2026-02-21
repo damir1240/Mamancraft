@@ -3,6 +3,8 @@
 #include "Mamancraft/Renderer/Vulkan/VulkanAllocator.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanCommandPool.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanDevice.hpp"
+#include "Mamancraft/Renderer/Vulkan/VulkanFramebuffer.hpp"
+#include "Mamancraft/Renderer/Vulkan/VulkanRenderPass.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanSwapchain.hpp"
 #include <SDL3/SDL.h>
 #include <memory>
@@ -31,6 +33,13 @@ public:
   const std::unique_ptr<VulkanCommandPool> &GetCommandPool() const {
     return m_CommandPool;
   }
+  const std::unique_ptr<VulkanRenderPass> &GetRenderPass() const {
+    return m_RenderPass;
+  }
+  const std::vector<std::unique_ptr<VulkanFramebuffer>> &
+  GetFramebuffers() const {
+    return m_Framebuffers;
+  }
 
 private:
   void Init();
@@ -44,6 +53,8 @@ private:
   bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
   void CreateLogicalDevice();
   void CreateSwapchain();
+  void CreateRenderPass();
+  void CreateFramebuffers();
   void CreateAllocator();
   void CreateCommandPool();
 
@@ -60,6 +71,8 @@ private:
 
   std::unique_ptr<VulkanDevice> m_Device;
   std::unique_ptr<VulkanSwapchain> m_Swapchain;
+  std::unique_ptr<VulkanRenderPass> m_RenderPass;
+  std::vector<std::unique_ptr<VulkanFramebuffer>> m_Framebuffers;
   std::unique_ptr<VulkanAllocator> m_Allocator;
   std::unique_ptr<VulkanCommandPool> m_CommandPool;
 
