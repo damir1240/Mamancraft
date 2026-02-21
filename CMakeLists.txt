@@ -73,6 +73,9 @@ add_custom_command(TARGET Mamancraft POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_BINARY_DIR}/assets"
         "$<TARGET_FILE_DIR:Mamancraft>/assets"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<TARGET_FILE:SDL3::SDL3-shared>"
+        "$<TARGET_FILE_DIR:Mamancraft>"
 )
 
 # GoogleTest
@@ -102,31 +105,18 @@ target_link_libraries(TestEngine PRIVATE
     GTest::gtest
 )
 
-# Auto-copy SDL3.dll to the output directories
-add_custom_command(TARGET Mamancraft POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "$<TARGET_FILE:SDL3::SDL3-shared>"
-    "$<TARGET_FILE_DIR:Mamancraft>"
-)
-add_custom_command(TARGET Mamancraft POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${CMAKE_BINARY_DIR}/shaders"
-    "$<TARGET_FILE_DIR:Mamancraft>/shaders"
-)
-
+# Auto-copy SDL3.dll and assets to test executables
 add_custom_command(TARGET TestDeps POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "$<TARGET_FILE:SDL3::SDL3-shared>"
-    "$<TARGET_FILE_DIR:TestDeps>"
+        "$<TARGET_FILE:SDL3::SDL3-shared>"
+        "$<TARGET_FILE_DIR:TestDeps>"
 )
 
 add_custom_command(TARGET TestEngine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "$<TARGET_FILE:SDL3::SDL3-shared>"
-    "$<TARGET_FILE_DIR:TestEngine>"
-)
-add_custom_command(TARGET TestEngine POST_BUILD
+        "$<TARGET_FILE:SDL3::SDL3-shared>"
+        "$<TARGET_FILE_DIR:TestEngine>"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${CMAKE_BINARY_DIR}/shaders"
-    "$<TARGET_FILE_DIR:TestEngine>/shaders"
+        "${CMAKE_BINARY_DIR}/assets"
+        "$<TARGET_FILE_DIR:TestEngine>/assets"
 )
