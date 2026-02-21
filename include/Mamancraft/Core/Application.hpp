@@ -5,9 +5,12 @@
 #include <memory>
 #include <string>
 
+#include "Mamancraft/Renderer/Vertex.hpp"
+#include "Mamancraft/Renderer/Vulkan/VulkanBuffer.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanPipeline.hpp"
 #include "Mamancraft/Renderer/VulkanContext.hpp"
 #include "Mamancraft/Renderer/VulkanRenderer.hpp"
+#include <vector>
 
 
 namespace mc {
@@ -41,6 +44,7 @@ private:
   std::unique_ptr<VulkanContext> m_VulkanContext;
   std::unique_ptr<VulkanPipeline> m_Pipeline;
   std::unique_ptr<VulkanRenderer> m_Renderer;
+  std::unique_ptr<VulkanBuffer> m_VertexBuffer;
 };
 
 } // namespace mc

@@ -7,7 +7,6 @@
 #include <memory>
 #include <vector>
 
-
 namespace mc {
 
 class VulkanRenderer {
@@ -24,7 +23,8 @@ public:
   void BeginRenderPass(vk::CommandBuffer commandBuffer);
   void EndRenderPass(vk::CommandBuffer commandBuffer);
 
-  void Draw(vk::CommandBuffer commandBuffer, VulkanPipeline &pipeline);
+  void Draw(vk::CommandBuffer commandBuffer, VulkanPipeline &pipeline,
+            vk::Buffer vertexBuffer);
 
 private:
   void CreateSyncObjects();

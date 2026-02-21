@@ -6,7 +6,6 @@
 #include <memory>
 #include <vector>
 
-
 namespace mc {
 
 struct PipelineConfigInfo {
@@ -25,6 +24,8 @@ struct PipelineConfigInfo {
   vk::PipelineDynamicStateCreateInfo dynamicStateInfo;
   vk::Format colorAttachmentFormat = vk::Format::eUndefined;
   vk::Format depthAttachmentFormat = vk::Format::eUndefined;
+  std::vector<vk::VertexInputBindingDescription> bindingDescriptions{};
+  std::vector<vk::VertexInputAttributeDescription> attributeDescriptions{};
 };
 
 class VulkanPipeline {

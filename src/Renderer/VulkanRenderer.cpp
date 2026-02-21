@@ -286,9 +286,14 @@ void VulkanRenderer::EndRenderPass(vk::CommandBuffer commandBuffer) {
 }
 
 void VulkanRenderer::Draw(vk::CommandBuffer commandBuffer,
-                          VulkanPipeline &pipeline) {
+                          VulkanPipeline &pipeline, vk::Buffer vertexBuffer) {
   commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
                              pipeline.GetPipeline());
+
+  vk::Buffer vertexBuffers[] = {vertexBuffer};
+  vk::DeviceSize offsets[] = {0};
+  commandBuffer.bindVertexBuffers(0, 1, vertexBuffers, offsets);
+
   commandBuffer.draw(3, 1, 0, 0); // 3 vertices, 1 instance
 }
 

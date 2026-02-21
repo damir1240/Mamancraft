@@ -54,6 +54,29 @@ void Application::Init() {
       m_VulkanContext->GetDevice(), vertShader, fragShader, pipelineConfig);
   m_Renderer = std::make_unique<VulkanRenderer>(*m_VulkanContext);
 
+  const std::vector<Vertex> vertices = {{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+                                        {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+                                        {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}};
+
+  vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+
+  VulkanBuffer stagingBuffer(
+      m_VulkanContext->GetAllocator()->GetAllocator(), bufferSize, 1,
+      vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY);
+  stagingBuffer.Map();
+  stagingBuffer.WriteToBuffer((void *)vertices.data(), bufferSize);
+  stagingBuffer.Unmap();
+
+  m_VertexBuffer = std::make_unique<VulkanBuffer>(
+      m_VulkanContext->GetAllocator()->GetAllocator(), bufferSize, 1,
+      vk::BufferUsageFlagBits::eVertexBuffer |
+          vk::BufferUsageFlagBits::eTransferDst,
+      VMA_MEMORY_USAGE_GPU_ONLY);
+
+  VulkanBuffer::CopyBuffer(
+      m_VulkanContext->GetDevice(), m_VulkanContext->GetCommandPool(),
+      stagingBuffer.GetBuffer(), m_VertexBuffer->GetBuffer(), bufferSize);
+
   m_IsRunning = true;
   MC_INFO("Application initialized successfully.");
 }
@@ -63,6 +86,7 @@ void Application::Shutdown() {
 
   m_Renderer.reset();
   m_Pipeline.reset();
+  m_VertexBuffer.reset();
   m_VulkanContext.reset();
 
   if (m_Window) {
@@ -110,7 +134,7 @@ void Application::Run() {
 
     if (auto commandBuffer = m_Renderer->BeginFrame()) {
       m_Renderer->BeginRenderPass(commandBuffer);
-      m_Renderer->Draw(commandBuffer, *m_Pipeline);
+      m_Renderer->Draw(commandBuffer, *m_Pipeline, m_VertexBuffer->GetBuffer());
       m_Renderer->EndRenderPass(commandBuffer);
       m_Renderer->EndFrame();
     }

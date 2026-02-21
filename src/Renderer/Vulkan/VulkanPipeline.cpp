@@ -1,5 +1,6 @@
 #include "Mamancraft/Renderer/Vulkan/VulkanPipeline.hpp"
 #include "Mamancraft/Core/Logger.hpp"
+#include "Mamancraft/Renderer/Vertex.hpp"
 
 #include <stdexcept>
 #include <vector>
@@ -35,10 +36,14 @@ VulkanPipeline::VulkanPipeline(const std::unique_ptr<VulkanDevice> &device,
                                                       fragShaderStageInfo};
 
   vk::PipelineVertexInputStateCreateInfo vertexInputInfo;
-  vertexInputInfo.vertexBindingDescriptionCount = 0;
-  vertexInputInfo.pVertexBindingDescriptions = nullptr;
-  vertexInputInfo.vertexAttributeDescriptionCount = 0;
-  vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+  vertexInputInfo.vertexBindingDescriptionCount =
+      static_cast<uint32_t>(configInfo.bindingDescriptions.size());
+  vertexInputInfo.pVertexBindingDescriptions =
+      configInfo.bindingDescriptions.data();
+  vertexInputInfo.vertexAttributeDescriptionCount =
+      static_cast<uint32_t>(configInfo.attributeDescriptions.size());
+  vertexInputInfo.pVertexAttributeDescriptions =
+      configInfo.attributeDescriptions.data();
 
   vk::GraphicsPipelineCreateInfo pipelineInfo;
   pipelineInfo.stageCount = 2;
@@ -109,6 +114,11 @@ void VulkanPipeline::CreatePipelineLayout() {
 }
 
 void VulkanPipeline::DefaultPipelineConfigInfo(PipelineConfigInfo &configInfo) {
+  configInfo.bindingDescriptions = {Vertex::GetBindingDescription()};
+  auto attributeDescriptions = Vertex::GetAttributeDescriptions();
+  configInfo.attributeDescriptions.assign(attributeDescriptions.begin(),
+                                          attributeDescriptions.end());
+
   configInfo.inputAssemblyInfo.topology = vk::PrimitiveTopology::eTriangleList;
   configInfo.inputAssemblyInfo.primitiveRestartEnable = VK_FALSE;
 
