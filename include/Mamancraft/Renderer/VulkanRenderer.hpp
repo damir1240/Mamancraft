@@ -3,9 +3,10 @@
 #include "Mamancraft/Renderer/Vulkan/VulkanPipeline.hpp"
 #include "Mamancraft/Renderer/VulkanContext.hpp"
 
+#include "Mamancraft/Renderer/Vulkan/VulkanCore.hpp"
 #include <memory>
 #include <vector>
-#include <vulkan/vulkan.h>
+
 
 namespace mc {
 
@@ -17,13 +18,13 @@ public:
   VulkanRenderer(const VulkanRenderer &) = delete;
   VulkanRenderer &operator=(const VulkanRenderer &) = delete;
 
-  VkCommandBuffer BeginFrame();
+  vk::CommandBuffer BeginFrame();
   void EndFrame();
 
-  void BeginRenderPass(VkCommandBuffer commandBuffer);
-  void EndRenderPass(VkCommandBuffer commandBuffer);
+  void BeginRenderPass(vk::CommandBuffer commandBuffer);
+  void EndRenderPass(vk::CommandBuffer commandBuffer);
 
-  void Draw(VkCommandBuffer commandBuffer, VulkanPipeline &pipeline);
+  void Draw(vk::CommandBuffer commandBuffer, VulkanPipeline &pipeline);
 
 private:
   void CreateSyncObjects();
@@ -33,10 +34,10 @@ private:
   VulkanContext &m_Context;
   std::vector<std::unique_ptr<VulkanCommandBuffer>> m_CommandBuffers;
 
-  std::vector<VkSemaphore> m_ImageAvailableSemaphores;
-  std::vector<VkSemaphore> m_RenderFinishedSemaphores;
-  std::vector<VkFence> m_InFlightFences;
-  std::vector<VkFence> m_ImagesInFlight;
+  std::vector<vk::Semaphore> m_ImageAvailableSemaphores;
+  std::vector<vk::Semaphore> m_RenderFinishedSemaphores;
+  std::vector<vk::Fence> m_InFlightFences;
+  std::vector<vk::Fence> m_ImagesInFlight;
 
   uint32_t m_CurrentFrameIndex = 0;
   uint32_t m_CurrentImageIndex = 0;

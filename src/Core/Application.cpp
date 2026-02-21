@@ -47,7 +47,8 @@ void Application::Init() {
 
   PipelineConfigInfo pipelineConfig;
   VulkanPipeline::DefaultPipelineConfigInfo(pipelineConfig);
-  pipelineConfig.renderPass = m_VulkanContext->GetRenderPass()->GetRenderPass();
+  pipelineConfig.colorAttachmentFormat =
+      m_VulkanContext->GetSwapchain()->GetImageFormat();
 
   m_Pipeline = std::make_unique<VulkanPipeline>(
       m_VulkanContext->GetDevice(), vertShader, fragShader, pipelineConfig);

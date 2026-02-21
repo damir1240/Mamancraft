@@ -1,8 +1,9 @@
 #pragma once
 
+#include "Mamancraft/Renderer/Vulkan/VulkanCore.hpp"
 #include <cstdint>
 #include <optional>
-#include <vulkan/vulkan.h>
+
 
 namespace mc {
 
@@ -19,26 +20,26 @@ struct QueueFamilyIndices {
 
 class VulkanDevice {
 public:
-  VulkanDevice(VkPhysicalDevice physicalDevice, VkDevice logicalDevice,
+  VulkanDevice(vk::PhysicalDevice physicalDevice, vk::Device logicalDevice,
                const QueueFamilyIndices &indices);
   ~VulkanDevice();
 
-  VkPhysicalDevice GetPhysicalDevice() const { return m_PhysicalDevice; }
-  VkDevice GetLogicalDevice() const { return m_LogicalDevice; }
+  vk::PhysicalDevice GetPhysicalDevice() const { return m_PhysicalDevice; }
+  vk::Device GetLogicalDevice() const { return m_LogicalDevice; }
 
-  VkQueue GetGraphicsQueue() const { return m_GraphicsQueue; }
-  VkQueue GetPresentQueue() const { return m_PresentQueue; }
-  VkQueue GetComputeQueue() const { return m_ComputeQueue; }
+  vk::Queue GetGraphicsQueue() const { return m_GraphicsQueue; }
+  vk::Queue GetPresentQueue() const { return m_PresentQueue; }
+  vk::Queue GetComputeQueue() const { return m_ComputeQueue; }
 
   const QueueFamilyIndices &GetQueueFamilyIndices() const { return m_Indices; }
 
 private:
-  VkPhysicalDevice m_PhysicalDevice;
-  VkDevice m_LogicalDevice;
+  vk::PhysicalDevice m_PhysicalDevice;
+  vk::Device m_LogicalDevice;
 
-  VkQueue m_GraphicsQueue;
-  VkQueue m_PresentQueue;
-  VkQueue m_ComputeQueue;
+  vk::Queue m_GraphicsQueue;
+  vk::Queue m_PresentQueue;
+  vk::Queue m_ComputeQueue;
 
   QueueFamilyIndices m_Indices;
 };

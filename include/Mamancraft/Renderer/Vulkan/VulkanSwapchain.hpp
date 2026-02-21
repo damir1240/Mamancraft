@@ -1,24 +1,23 @@
 #pragma once
 
+#include "Mamancraft/Renderer/Vulkan/VulkanCore.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanDevice.hpp"
 #include <SDL3/SDL.h>
 #include <memory>
 #include <vector>
-#include <vulkan/vulkan.h>
-
 
 namespace mc {
 
 struct SwapchainSupportDetails {
-  VkSurfaceCapabilitiesKHR capabilities;
-  std::vector<VkSurfaceFormatKHR> formats;
-  std::vector<VkPresentModeKHR> presentModes;
+  vk::SurfaceCapabilitiesKHR capabilities;
+  std::vector<vk::SurfaceFormatKHR> formats;
+  std::vector<vk::PresentModeKHR> presentModes;
 };
 
 class VulkanSwapchain {
 public:
   VulkanSwapchain(const std::unique_ptr<VulkanDevice> &device,
-                  VkInstance instance, VkSurfaceKHR surface,
+                  vk::Instance instance, vk::SurfaceKHR surface,
                   SDL_Window *window);
   ~VulkanSwapchain();
 
@@ -27,38 +26,40 @@ public:
 
   void Recreate();
 
-  VkSwapchainKHR GetSwapchain() const { return m_Swapchain; }
-  VkFormat GetImageFormat() const { return m_ImageFormat; }
-  VkExtent2D GetExtent() const { return m_Extent; }
-  const std::vector<VkImage> &GetImages() const { return m_Images; }
-  const std::vector<VkImageView> &GetImageViews() const { return m_ImageViews; }
+  vk::SwapchainKHR GetSwapchain() const { return m_Swapchain; }
+  vk::Format GetImageFormat() const { return m_ImageFormat; }
+  vk::Extent2D GetExtent() const { return m_Extent; }
+  const std::vector<vk::Image> &GetImages() const { return m_Images; }
+  const std::vector<vk::ImageView> &GetImageViews() const {
+    return m_ImageViews;
+  }
 
-  static SwapchainSupportDetails QuerySwapchainSupport(VkPhysicalDevice device,
-                                                       VkSurfaceKHR surface);
+  static SwapchainSupportDetails
+  QuerySwapchainSupport(vk::PhysicalDevice device, vk::SurfaceKHR surface);
 
 private:
   void CreateSwapchain();
   void CreateImageViews();
   void CleanUp();
 
-  VkSurfaceFormatKHR ChooseSwapSurfaceFormat(
-      const std::vector<VkSurfaceFormatKHR> &availableFormats);
-  VkPresentModeKHR ChooseSwapPresentMode(
-      const std::vector<VkPresentModeKHR> &availablePresentModes);
-  VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities);
+  vk::SurfaceFormatKHR ChooseSwapSurfaceFormat(
+      const std::vector<vk::SurfaceFormatKHR> &availableFormats);
+  vk::PresentModeKHR ChooseSwapPresentMode(
+      const std::vector<vk::PresentModeKHR> &availablePresentModes);
+  vk::Extent2D ChooseSwapExtent(const vk::SurfaceCapabilitiesKHR &capabilities);
 
 private:
   const std::unique_ptr<VulkanDevice> &m_Device;
-  VkInstance m_Instance;
-  VkSurfaceKHR m_Surface;
+  vk::Instance m_Instance;
+  vk::SurfaceKHR m_Surface;
   SDL_Window *m_Window;
 
-  VkSwapchainKHR m_Swapchain = VK_NULL_HANDLE;
-  VkFormat m_ImageFormat;
-  VkExtent2D m_Extent;
+  vk::SwapchainKHR m_Swapchain = nullptr;
+  vk::Format m_ImageFormat;
+  vk::Extent2D m_Extent;
 
-  std::vector<VkImage> m_Images;
-  std::vector<VkImageView> m_ImageViews;
+  std::vector<vk::Image> m_Images;
+  std::vector<vk::ImageView> m_ImageViews;
 };
 
 } // namespace mc

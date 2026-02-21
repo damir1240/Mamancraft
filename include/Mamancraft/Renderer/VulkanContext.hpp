@@ -2,14 +2,13 @@
 
 #include "Mamancraft/Renderer/Vulkan/VulkanAllocator.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanCommandPool.hpp"
+#include "Mamancraft/Renderer/Vulkan/VulkanCore.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanDevice.hpp"
-#include "Mamancraft/Renderer/Vulkan/VulkanFramebuffer.hpp"
-#include "Mamancraft/Renderer/Vulkan/VulkanRenderPass.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanSwapchain.hpp"
 #include <SDL3/SDL.h>
 #include <memory>
 #include <vector>
-#include <vulkan/vulkan.h>
+
 
 namespace mc {
 
@@ -21,8 +20,8 @@ public:
   VulkanContext(const VulkanContext &) = delete;
   VulkanContext &operator=(const VulkanContext &) = delete;
 
-  VkInstance GetInstance() const { return m_Instance; }
-  VkSurfaceKHR GetSurface() const { return m_Surface; }
+  vk::Instance GetInstance() const { return m_Instance; }
+  vk::SurfaceKHR GetSurface() const { return m_Surface; }
   const std::unique_ptr<VulkanDevice> &GetDevice() const { return m_Device; }
   const std::unique_ptr<VulkanSwapchain> &GetSwapchain() const {
     return m_Swapchain;
@@ -33,13 +32,6 @@ public:
   const std::unique_ptr<VulkanCommandPool> &GetCommandPool() const {
     return m_CommandPool;
   }
-  const std::unique_ptr<VulkanRenderPass> &GetRenderPass() const {
-    return m_RenderPass;
-  }
-  const std::vector<std::unique_ptr<VulkanFramebuffer>> &
-  GetFramebuffers() const {
-    return m_Framebuffers;
-  }
 
 private:
   void Init();
@@ -49,12 +41,10 @@ private:
   void SetupDebugMessenger();
   void CreateSurface();
   void PickPhysicalDevice();
-  QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
-  bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
+  QueueFamilyIndices FindQueueFamilies(vk::PhysicalDevice device);
+  bool CheckDeviceExtensionSupport(vk::PhysicalDevice device);
   void CreateLogicalDevice();
   void CreateSwapchain();
-  void CreateRenderPass();
-  void CreateFramebuffers();
   void CreateAllocator();
   void CreateCommandPool();
 
@@ -64,15 +54,13 @@ private:
 private:
   SDL_Window *m_Window;
 
-  VkInstance m_Instance = VK_NULL_HANDLE;
-  VkDebugUtilsMessengerEXT m_DebugMessenger = VK_NULL_HANDLE;
-  VkSurfaceKHR m_Surface = VK_NULL_HANDLE;
-  VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
+  vk::Instance m_Instance = nullptr;
+  vk::DebugUtilsMessengerEXT m_DebugMessenger = nullptr;
+  vk::SurfaceKHR m_Surface = nullptr;
+  vk::PhysicalDevice m_PhysicalDevice = nullptr;
 
   std::unique_ptr<VulkanDevice> m_Device;
   std::unique_ptr<VulkanSwapchain> m_Swapchain;
-  std::unique_ptr<VulkanRenderPass> m_RenderPass;
-  std::vector<std::unique_ptr<VulkanFramebuffer>> m_Framebuffers;
   std::unique_ptr<VulkanAllocator> m_Allocator;
   std::unique_ptr<VulkanCommandPool> m_CommandPool;
 

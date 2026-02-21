@@ -14,10 +14,9 @@ VulkanShader::VulkanShader(const std::unique_ptr<VulkanDevice> &device,
 }
 
 VulkanShader::~VulkanShader() {
-  if (m_ShaderModule != VK_NULL_HANDLE) {
-    vkDestroyShaderModule(m_Device->GetLogicalDevice(), m_ShaderModule,
-                          nullptr);
-    m_ShaderModule = VK_NULL_HANDLE;
+  if (m_ShaderModule) {
+    m_Device->GetLogicalDevice().destroyShaderModule(m_ShaderModule);
+    m_ShaderModule = nullptr;
   }
 }
 
@@ -40,14 +39,15 @@ std::vector<char> VulkanShader::ReadFile(const std::string &filepath) {
 }
 
 void VulkanShader::CreateShaderModule(const std::vector<char> &code) {
-  VkShaderModuleCreateInfo createInfo{};
-  createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+  vk::ShaderModuleCreateInfo createInfo;
   createInfo.codeSize = code.size();
   createInfo.pCode = reinterpret_cast<const uint32_t *>(code.data());
 
-  if (vkCreateShaderModule(m_Device->GetLogicalDevice(), &createInfo, nullptr,
-                           &m_ShaderModule) != VK_SUCCESS) {
-    MC_CRITICAL("Failed to create Vulkan Shader Module!");
+  try {
+    m_ShaderModule =
+        m_Device->GetLogicalDevice().createShaderModule(createInfo);
+  } catch (const vk::SystemError &e) {
+    MC_CRITICAL("Failed to create Vulkan Shader Module! Error: {}", e.what());
     throw std::runtime_error("failed to create shader module!");
   }
 }

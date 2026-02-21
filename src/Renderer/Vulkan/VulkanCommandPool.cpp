@@ -7,25 +7,25 @@ namespace mc {
 
 VulkanCommandPool::VulkanCommandPool(
     const std::unique_ptr<VulkanDevice> &device, uint32_t queueFamilyIndex,
-    VkCommandPoolCreateFlags flags)
+    vk::CommandPoolCreateFlags flags)
     : m_Device(device) {
 
-  VkCommandPoolCreateInfo poolInfo{};
-  poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+  vk::CommandPoolCreateInfo poolInfo;
   poolInfo.flags = flags;
   poolInfo.queueFamilyIndex = queueFamilyIndex;
 
-  if (vkCreateCommandPool(m_Device->GetLogicalDevice(), &poolInfo, nullptr,
-                          &m_CommandPool) != VK_SUCCESS) {
-    MC_CRITICAL("Failed to create Command Pool!");
+  try {
+    m_CommandPool = m_Device->GetLogicalDevice().createCommandPool(poolInfo);
+  } catch (const vk::SystemError &e) {
+    MC_CRITICAL("Failed to create Command Pool! Error: {}", e.what());
     throw std::runtime_error("failed to create command pool!");
   }
   MC_INFO("Vulkan Command Pool created successfully.");
 }
 
 VulkanCommandPool::~VulkanCommandPool() {
-  if (m_CommandPool != VK_NULL_HANDLE) {
-    vkDestroyCommandPool(m_Device->GetLogicalDevice(), m_CommandPool, nullptr);
+  if (m_CommandPool) {
+    m_Device->GetLogicalDevice().destroyCommandPool(m_CommandPool);
   }
 }
 
@@ -51,50 +51,55 @@ VulkanCommandPool::AllocateCommandBuffers(uint32_t count, bool primary) {
 // -------------------------------------------------------------
 
 VulkanCommandBuffer::VulkanCommandBuffer(
-    const std::unique_ptr<VulkanDevice> &device, VkCommandPool commandPool,
+    const std::unique_ptr<VulkanDevice> &device, vk::CommandPool commandPool,
     bool primary)
     : m_Device(device), m_CommandPool(commandPool) {
 
-  VkCommandBufferAllocateInfo allocInfo{};
-  allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+  vk::CommandBufferAllocateInfo allocInfo;
   allocInfo.commandPool = m_CommandPool;
-  allocInfo.level = primary ? VK_COMMAND_BUFFER_LEVEL_PRIMARY
-                            : VK_COMMAND_BUFFER_LEVEL_SECONDARY;
+  allocInfo.level = primary ? vk::CommandBufferLevel::ePrimary
+                            : vk::CommandBufferLevel::eSecondary;
   allocInfo.commandBufferCount = 1;
 
-  if (vkAllocateCommandBuffers(m_Device->GetLogicalDevice(), &allocInfo,
-                               &m_CommandBuffer) != VK_SUCCESS) {
-    MC_CRITICAL("Failed to allocate command buffer!");
+  try {
+    std::vector<vk::CommandBuffer> buffers =
+        m_Device->GetLogicalDevice().allocateCommandBuffers(allocInfo);
+    m_CommandBuffer = buffers[0];
+  } catch (const vk::SystemError &e) {
+    MC_CRITICAL("Failed to allocate command buffer! Error: {}", e.what());
     throw std::runtime_error("failed to allocate command buffer!");
   }
 }
 
 VulkanCommandBuffer::~VulkanCommandBuffer() {
-  if (m_CommandBuffer != VK_NULL_HANDLE) {
-    vkFreeCommandBuffers(m_Device->GetLogicalDevice(), m_CommandPool, 1,
-                         &m_CommandBuffer);
+  if (m_CommandBuffer) {
+    m_Device->GetLogicalDevice().freeCommandBuffers(m_CommandPool,
+                                                    m_CommandBuffer);
   }
 }
 
-void VulkanCommandBuffer::Begin(VkCommandBufferUsageFlags flags) {
-  VkCommandBufferBeginInfo beginInfo{};
-  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+void VulkanCommandBuffer::Begin(vk::CommandBufferUsageFlags flags) {
+  vk::CommandBufferBeginInfo beginInfo;
   beginInfo.flags = flags;
-  beginInfo.pInheritanceInfo = nullptr; // Optional
 
-  if (vkBeginCommandBuffer(m_CommandBuffer, &beginInfo) != VK_SUCCESS) {
-    MC_CRITICAL("Failed to begin recording command buffer!");
+  try {
+    m_CommandBuffer.begin(beginInfo);
+  } catch (const vk::SystemError &e) {
+    MC_CRITICAL("Failed to begin recording command buffer! Error: {}",
+                e.what());
     throw std::runtime_error("failed to begin recording command buffer!");
   }
 }
 
 void VulkanCommandBuffer::End() {
-  if (vkEndCommandBuffer(m_CommandBuffer) != VK_SUCCESS) {
-    MC_CRITICAL("Failed to record command buffer!");
+  try {
+    m_CommandBuffer.end();
+  } catch (const vk::SystemError &e) {
+    MC_CRITICAL("Failed to record command buffer! Error: {}", e.what());
     throw std::runtime_error("failed to record command buffer!");
   }
 }
 
-void VulkanCommandBuffer::Reset() { vkResetCommandBuffer(m_CommandBuffer, 0); }
+void VulkanCommandBuffer::Reset() { m_CommandBuffer.reset(); }
 
 } // namespace mc

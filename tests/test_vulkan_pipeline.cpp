@@ -66,7 +66,7 @@ TEST_F(VulkanPipelineTest, CreateVulkanPipeline) {
 
   mc::PipelineConfigInfo configInfo;
   mc::VulkanPipeline::DefaultPipelineConfigInfo(configInfo);
-  configInfo.renderPass = context->GetRenderPass()->GetRenderPass();
+  configInfo.colorAttachmentFormat = context->GetSwapchain()->GetImageFormat();
 
   EXPECT_NO_THROW({
     mc::VulkanPipeline pipeline(context->GetDevice(), vertShader, fragShader,

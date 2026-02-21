@@ -1,10 +1,9 @@
 #pragma once
 
+#include "Mamancraft/Renderer/Vulkan/VulkanCore.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanDevice.hpp"
 #include <memory>
 #include <vector>
-#include <vulkan/vulkan.h>
-
 
 namespace mc {
 
@@ -14,7 +13,7 @@ class VulkanCommandPool {
 public:
   VulkanCommandPool(const std::unique_ptr<VulkanDevice> &device,
                     uint32_t queueFamilyIndex,
-                    VkCommandPoolCreateFlags flags = 0);
+                    vk::CommandPoolCreateFlags flags = {});
   ~VulkanCommandPool();
 
   VulkanCommandPool(const VulkanCommandPool &) = delete;
@@ -25,32 +24,32 @@ public:
   std::vector<std::unique_ptr<VulkanCommandBuffer>>
   AllocateCommandBuffers(uint32_t count, bool primary = true);
 
-  VkCommandPool GetCommandPool() const { return m_CommandPool; }
+  vk::CommandPool GetCommandPool() const { return m_CommandPool; }
 
 private:
   const std::unique_ptr<VulkanDevice> &m_Device;
-  VkCommandPool m_CommandPool = VK_NULL_HANDLE;
+  vk::CommandPool m_CommandPool = nullptr;
 };
 
 class VulkanCommandBuffer {
 public:
   VulkanCommandBuffer(const std::unique_ptr<VulkanDevice> &device,
-                      VkCommandPool commandPool, bool primary);
+                      vk::CommandPool commandPool, bool primary);
   ~VulkanCommandBuffer();
 
   VulkanCommandBuffer(const VulkanCommandBuffer &) = delete;
   VulkanCommandBuffer &operator=(const VulkanCommandBuffer &) = delete;
 
-  void Begin(VkCommandBufferUsageFlags flags = 0);
+  void Begin(vk::CommandBufferUsageFlags flags = {});
   void End();
   void Reset();
 
-  VkCommandBuffer GetCommandBuffer() const { return m_CommandBuffer; }
+  vk::CommandBuffer GetCommandBuffer() const { return m_CommandBuffer; }
 
 private:
   const std::unique_ptr<VulkanDevice> &m_Device;
-  VkCommandPool m_CommandPool;
-  VkCommandBuffer m_CommandBuffer = VK_NULL_HANDLE;
+  vk::CommandPool m_CommandPool;
+  vk::CommandBuffer m_CommandBuffer = nullptr;
 };
 
 } // namespace mc

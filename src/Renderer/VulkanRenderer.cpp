@@ -12,17 +12,17 @@ VulkanRenderer::VulkanRenderer(VulkanContext &context) : m_Context(context) {
 }
 
 VulkanRenderer::~VulkanRenderer() {
-  VkDevice device = m_Context.GetDevice()->GetLogicalDevice();
+  vk::Device device = m_Context.GetDevice()->GetLogicalDevice();
 
-  vkDeviceWaitIdle(device);
+  device.waitIdle();
 
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    vkDestroySemaphore(device, m_ImageAvailableSemaphores[i], nullptr);
-    vkDestroyFence(device, m_InFlightFences[i], nullptr);
+    device.destroySemaphore(m_ImageAvailableSemaphores[i]);
+    device.destroyFence(m_InFlightFences[i]);
   }
 
   for (auto sem : m_RenderFinishedSemaphores) {
-    vkDestroySemaphore(device, sem, nullptr);
+    device.destroySemaphore(sem);
   }
 }
 
@@ -36,73 +36,87 @@ void VulkanRenderer::CreateSyncObjects() {
   uint32_t imageCount = m_Context.GetSwapchain()->GetImages().size();
   m_RenderFinishedSemaphores.resize(imageCount);
   m_InFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
-  m_ImagesInFlight.resize(imageCount, VK_NULL_HANDLE);
+  m_ImagesInFlight.resize(imageCount, nullptr);
 
-  VkSemaphoreCreateInfo semaphoreInfo{};
-  semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+  vk::SemaphoreCreateInfo semaphoreInfo;
+  vk::FenceCreateInfo fenceInfo;
+  fenceInfo.flags = vk::FenceCreateFlagBits::eSignaled;
 
-  VkFenceCreateInfo fenceInfo{};
-  fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-  fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-  VkDevice device = m_Context.GetDevice()->GetLogicalDevice();
+  vk::Device device = m_Context.GetDevice()->GetLogicalDevice();
 
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    if (vkCreateSemaphore(device, &semaphoreInfo, nullptr,
-                          &m_ImageAvailableSemaphores[i]) != VK_SUCCESS ||
-        vkCreateFence(device, &fenceInfo, nullptr, &m_InFlightFences[i]) !=
-            VK_SUCCESS) {
-      MC_CRITICAL("Failed to create Vulkan Sync Objects!");
+    try {
+      m_ImageAvailableSemaphores[i] = device.createSemaphore(semaphoreInfo);
+      m_InFlightFences[i] = device.createFence(fenceInfo);
+    } catch (const vk::SystemError &e) {
+      MC_CRITICAL("Failed to create Vulkan Sync Objects! Error: {}", e.what());
       throw std::runtime_error("failed to create sync objects for a frame!");
     }
   }
 
   for (size_t i = 0; i < imageCount; i++) {
-    if (vkCreateSemaphore(device, &semaphoreInfo, nullptr,
-                          &m_RenderFinishedSemaphores[i]) != VK_SUCCESS) {
-      MC_CRITICAL("Failed to create Vulkan RenderFinished Semaphores!");
+    try {
+      m_RenderFinishedSemaphores[i] = device.createSemaphore(semaphoreInfo);
+    } catch (const vk::SystemError &e) {
+      MC_CRITICAL(
+          "Failed to create Vulkan RenderFinished Semaphores! Error: {}",
+          e.what());
       throw std::runtime_error("failed to create sync objects for a frame!");
     }
   }
 }
 
-VkCommandBuffer VulkanRenderer::BeginFrame() {
+vk::CommandBuffer VulkanRenderer::BeginFrame() {
   if (m_IsFrameStarted) {
     MC_WARN("Cannot call BeginFrame while already in progress");
-    return VK_NULL_HANDLE;
+    return nullptr;
   }
 
-  VkDevice device = m_Context.GetDevice()->GetLogicalDevice();
-  VkSwapchainKHR swapchain = m_Context.GetSwapchain()->GetSwapchain();
+  vk::Device device = m_Context.GetDevice()->GetLogicalDevice();
+  vk::SwapchainKHR swapchain = m_Context.GetSwapchain()->GetSwapchain();
 
-  vkWaitForFences(device, 1, &m_InFlightFences[m_CurrentFrameIndex], VK_TRUE,
-                  UINT64_MAX);
+  if (device.waitForFences(1, &m_InFlightFences[m_CurrentFrameIndex], VK_TRUE,
+                           UINT64_MAX) != vk::Result::eSuccess) {
+    MC_CRITICAL("Wait for fences failed");
+  }
 
-  VkResult result =
-      vkAcquireNextImageKHR(device, swapchain, UINT64_MAX,
-                            m_ImageAvailableSemaphores[m_CurrentFrameIndex],
-                            VK_NULL_HANDLE, &m_CurrentImageIndex);
+  vk::Result result;
+  try {
+    auto acquireResult = device.acquireNextImageKHR(
+        swapchain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrameIndex],
+        nullptr);
+    result = acquireResult.result;
+    m_CurrentImageIndex = acquireResult.value;
+  } catch (const vk::OutOfDateKHRError &) {
+    result = vk::Result::eErrorOutOfDateKHR;
+  } catch (const vk::SystemError &e) {
+    MC_CRITICAL("Failed to acquire swapchain image! Error: {}", e.what());
+    throw std::runtime_error("failed to acquire swapchain image!");
+  }
 
-  if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+  if (result == vk::Result::eErrorOutOfDateKHR) {
     // Requires swapchain recreation.
     m_Context.GetSwapchain()->Recreate();
-    return VK_NULL_HANDLE;
-  } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+    return nullptr;
+  } else if (result != vk::Result::eSuccess &&
+             result != vk::Result::eSuboptimalKHR) {
     MC_CRITICAL("Failed to acquire swapchain image!");
     throw std::runtime_error("failed to acquire swapchain image!");
   }
 
   // Check if a previous frame is using this image (i.e. there is its fence to
   // wait on)
-  if (m_ImagesInFlight[m_CurrentImageIndex] != VK_NULL_HANDLE) {
-    vkWaitForFences(device, 1, &m_ImagesInFlight[m_CurrentImageIndex], VK_TRUE,
-                    UINT64_MAX);
+  if (m_ImagesInFlight[m_CurrentImageIndex]) {
+    if (device.waitForFences(1, &m_ImagesInFlight[m_CurrentImageIndex], VK_TRUE,
+                             UINT64_MAX) != vk::Result::eSuccess) {
+      MC_CRITICAL("Wait for fences (image in flight) failed");
+    }
   }
 
   // Mark the image as now being in use by this frame
   m_ImagesInFlight[m_CurrentImageIndex] = m_InFlightFences[m_CurrentFrameIndex];
 
-  vkResetFences(device, 1, &m_InFlightFences[m_CurrentFrameIndex]);
+  (void)device.resetFences(1, &m_InFlightFences[m_CurrentFrameIndex]);
 
   auto commandBuffer =
       m_CommandBuffers[m_CurrentFrameIndex]->GetCommandBuffer();
@@ -127,13 +141,12 @@ void VulkanRenderer::EndFrame() {
   // End command buffer
   m_CommandBuffers[m_CurrentFrameIndex]->End();
 
-  VkSubmitInfo submitInfo{};
-  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  vk::SubmitInfo submitInfo;
 
-  VkSemaphore waitSemaphores[] = {
+  vk::Semaphore waitSemaphores[] = {
       m_ImageAvailableSemaphores[m_CurrentFrameIndex]};
-  VkPipelineStageFlags waitStages[] = {
-      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+  vk::PipelineStageFlags waitStages[] = {
+      vk::PipelineStageFlagBits::eColorAttachmentOutput};
   submitInfo.waitSemaphoreCount = 1;
   submitInfo.pWaitSemaphores = waitSemaphores;
   submitInfo.pWaitDstStageMask = waitStages;
@@ -141,34 +154,42 @@ void VulkanRenderer::EndFrame() {
   submitInfo.commandBufferCount = 1;
   submitInfo.pCommandBuffers = &commandBuffer;
 
-  VkSemaphore signalSemaphores[] = {
+  vk::Semaphore signalSemaphores[] = {
       m_RenderFinishedSemaphores[m_CurrentImageIndex]};
   submitInfo.signalSemaphoreCount = 1;
   submitInfo.pSignalSemaphores = signalSemaphores;
 
-  if (vkQueueSubmit(m_Context.GetDevice()->GetGraphicsQueue(), 1, &submitInfo,
-                    m_InFlightFences[m_CurrentFrameIndex]) != VK_SUCCESS) {
-    MC_CRITICAL("Failed to submit draw command buffer!");
+  try {
+    m_Context.GetDevice()->GetGraphicsQueue().submit(
+        submitInfo, m_InFlightFences[m_CurrentFrameIndex]);
+  } catch (const vk::SystemError &e) {
+    MC_CRITICAL("Failed to submit draw command buffer! Error: {}", e.what());
     throw std::runtime_error("failed to submit draw command buffer!");
   }
 
-  VkPresentInfoKHR presentInfo{};
-  presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-
+  vk::PresentInfoKHR presentInfo;
   presentInfo.waitSemaphoreCount = 1;
   presentInfo.pWaitSemaphores = signalSemaphores;
 
-  VkSwapchainKHR swapchains[] = {m_Context.GetSwapchain()->GetSwapchain()};
+  vk::SwapchainKHR swapchains[] = {m_Context.GetSwapchain()->GetSwapchain()};
   presentInfo.swapchainCount = 1;
   presentInfo.pSwapchains = swapchains;
   presentInfo.pImageIndices = &m_CurrentImageIndex;
 
-  VkResult result =
-      vkQueuePresentKHR(m_Context.GetDevice()->GetPresentQueue(), &presentInfo);
+  vk::Result result;
+  try {
+    result = m_Context.GetDevice()->GetPresentQueue().presentKHR(presentInfo);
+  } catch (const vk::OutOfDateKHRError &) {
+    result = vk::Result::eErrorOutOfDateKHR;
+  } catch (const vk::SystemError &e) {
+    MC_CRITICAL("Failed to present swapchain image! Error: {}", e.what());
+    throw std::runtime_error("failed to present swapchain image!");
+  }
 
-  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+  if (result == vk::Result::eErrorOutOfDateKHR ||
+      result == vk::Result::eSuboptimalKHR) {
     m_Context.GetSwapchain()->Recreate();
-  } else if (result != VK_SUCCESS) {
+  } else if (result != vk::Result::eSuccess) {
     MC_CRITICAL("Failed to present swapchain image!");
     throw std::runtime_error("failed to present swapchain image!");
   }
@@ -177,32 +198,53 @@ void VulkanRenderer::EndFrame() {
   m_CurrentFrameIndex = (m_CurrentFrameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-void VulkanRenderer::BeginRenderPass(VkCommandBuffer commandBuffer) {
-  VkRenderPassBeginInfo renderPassInfo{};
-  renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-  renderPassInfo.renderPass = m_Context.GetRenderPass()->GetRenderPass();
+void VulkanRenderer::BeginRenderPass(vk::CommandBuffer commandBuffer) {
+  vk::RenderingAttachmentInfo colorAttachment;
+  colorAttachment.imageView =
+      m_Context.GetSwapchain()->GetImageViews()[m_CurrentImageIndex];
+  colorAttachment.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
+  colorAttachment.loadOp = vk::AttachmentLoadOp::eClear;
+  colorAttachment.storeOp = vk::AttachmentStoreOp::eStore;
+  colorAttachment.clearValue.color =
+      vk::ClearColorValue(std::array<float, 4>{0.01f, 0.01f, 0.01f, 1.0f});
 
-  if (m_CurrentImageIndex >= m_Context.GetFramebuffers().size()) {
-    MC_CRITICAL("Image index {} out of framebuffers range {}",
-                m_CurrentImageIndex, m_Context.GetFramebuffers().size());
-    return;
-  }
+  vk::RenderingInfo renderingInfo;
+  renderingInfo.renderArea.offset = vk::Offset2D{0, 0};
+  renderingInfo.renderArea.extent = m_Context.GetSwapchain()->GetExtent();
+  renderingInfo.layerCount = 1;
+  renderingInfo.colorAttachmentCount = 1;
+  renderingInfo.pColorAttachments = &colorAttachment;
 
-  renderPassInfo.framebuffer =
-      m_Context.GetFramebuffers()[m_CurrentImageIndex]->GetFramebuffer();
+  // Dynamic Rendering layout transitions - wait, we must transition the image
+  // layout! BUT we also need to use dynamic rendering correctly. Oh, we need
+  // image layout transitions. Actually, later in pipeline or frame logic we add
+  // full image barriers. For now, let vk::CommandBuffer::beginRendering handle
+  // the rendering info. Note: if there's no render pass, the developer is
+  // expected to transition image to eColorAttachmentOptimal before rendering!
 
-  renderPassInfo.renderArea.offset = {0, 0};
-  renderPassInfo.renderArea.extent = m_Context.GetSwapchain()->GetExtent();
+  vk::ImageMemoryBarrier barrier;
+  barrier.oldLayout = vk::ImageLayout::eUndefined;
+  barrier.newLayout = vk::ImageLayout::eColorAttachmentOptimal;
+  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.image = m_Context.GetSwapchain()->GetImages()[m_CurrentImageIndex];
+  barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+  barrier.subresourceRange.baseMipLevel = 0;
+  barrier.subresourceRange.levelCount = 1;
+  barrier.subresourceRange.baseArrayLayer = 0;
+  barrier.subresourceRange.layerCount = 1;
+  barrier.srcAccessMask = vk::AccessFlags{};
+  barrier.dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
 
-  VkClearValue clearColor = {{{0.01f, 0.01f, 0.01f, 1.0f}}};
-  renderPassInfo.clearValueCount = 1;
-  renderPassInfo.pClearValues = &clearColor;
+  commandBuffer.pipelineBarrier(
+      vk::PipelineStageFlagBits::eTopOfPipe,
+      vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::DependencyFlags{},
+      nullptr, nullptr, barrier);
 
-  vkCmdBeginRenderPass(commandBuffer, &renderPassInfo,
-                       VK_SUBPASS_CONTENTS_INLINE);
+  commandBuffer.beginRendering(renderingInfo);
 
   // Set Viewport and Scissor for dynamic states
-  VkViewport viewport{};
+  vk::Viewport viewport;
   viewport.x = 0.0f;
   viewport.y = 0.0f;
   viewport.width =
@@ -211,23 +253,43 @@ void VulkanRenderer::BeginRenderPass(VkCommandBuffer commandBuffer) {
       static_cast<float>(m_Context.GetSwapchain()->GetExtent().height);
   viewport.minDepth = 0.0f;
   viewport.maxDepth = 1.0f;
-  vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+  commandBuffer.setViewport(0, 1, &viewport);
 
-  VkRect2D scissor{};
-  scissor.offset = {0, 0};
+  vk::Rect2D scissor;
+  scissor.offset = vk::Offset2D{0, 0};
   scissor.extent = m_Context.GetSwapchain()->GetExtent();
-  vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+  commandBuffer.setScissor(0, 1, &scissor);
 }
 
-void VulkanRenderer::EndRenderPass(VkCommandBuffer commandBuffer) {
-  vkCmdEndRenderPass(commandBuffer);
+void VulkanRenderer::EndRenderPass(vk::CommandBuffer commandBuffer) {
+  commandBuffer.endRendering();
+
+  // Transition image back to PRESENT layout
+  vk::ImageMemoryBarrier barrier;
+  barrier.oldLayout = vk::ImageLayout::eColorAttachmentOptimal;
+  barrier.newLayout = vk::ImageLayout::ePresentSrcKHR;
+  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.image = m_Context.GetSwapchain()->GetImages()[m_CurrentImageIndex];
+  barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+  barrier.subresourceRange.baseMipLevel = 0;
+  barrier.subresourceRange.levelCount = 1;
+  barrier.subresourceRange.baseArrayLayer = 0;
+  barrier.subresourceRange.layerCount = 1;
+  barrier.srcAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
+  barrier.dstAccessMask = vk::AccessFlags{};
+
+  commandBuffer.pipelineBarrier(
+      vk::PipelineStageFlagBits::eColorAttachmentOutput,
+      vk::PipelineStageFlagBits::eBottomOfPipe, vk::DependencyFlags{}, nullptr,
+      nullptr, barrier);
 }
 
-void VulkanRenderer::Draw(VkCommandBuffer commandBuffer,
+void VulkanRenderer::Draw(vk::CommandBuffer commandBuffer,
                           VulkanPipeline &pipeline) {
-  vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                    pipeline.GetPipeline());
-  vkCmdDraw(commandBuffer, 3, 1, 0, 0); // 3 vertices, 1 instance
+  commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
+                             pipeline.GetPipeline());
+  commandBuffer.draw(3, 1, 0, 0); // 3 vertices, 1 instance
 }
 
 } // namespace mc

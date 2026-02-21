@@ -52,6 +52,10 @@ add_library(MamancraftEngine STATIC ${MAMANCRAFT_ENGINE_SRCS})
 target_include_directories(MamancraftEngine PUBLIC include)
 target_include_directories(MamancraftEngine PRIVATE external) # Для доступа к коренным папкам зависимостей если нужно
 
+target_compile_definitions(MamancraftEngine PUBLIC 
+    VULKAN_HPP_NO_SETTERS
+)
+
 target_link_libraries(MamancraftEngine PUBLIC 
     Vulkan::Vulkan 
     SDL3::SDL3

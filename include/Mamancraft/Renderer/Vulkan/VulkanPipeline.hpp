@@ -1,10 +1,11 @@
 #pragma once
 
+#include "Mamancraft/Renderer/Vulkan/VulkanCore.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanDevice.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanShader.hpp"
 #include <memory>
 #include <vector>
-#include <vulkan/vulkan.h>
+
 
 namespace mc {
 
@@ -13,17 +14,17 @@ struct PipelineConfigInfo {
   PipelineConfigInfo(const PipelineConfigInfo &) = delete;
   PipelineConfigInfo &operator=(const PipelineConfigInfo &) = delete;
 
-  VkPipelineViewportStateCreateInfo viewportInfo{};
-  VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo{};
-  VkPipelineRasterizationStateCreateInfo rasterizationInfo{};
-  VkPipelineMultisampleStateCreateInfo multisampleInfo{};
-  VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-  VkPipelineColorBlendStateCreateInfo colorBlendInfo{};
-  VkPipelineDepthStencilStateCreateInfo depthStencilInfo{};
-  std::vector<VkDynamicState> dynamicStateEnables;
-  VkPipelineDynamicStateCreateInfo dynamicStateInfo{};
-  VkRenderPass renderPass = VK_NULL_HANDLE;
-  uint32_t subpass = 0;
+  vk::PipelineViewportStateCreateInfo viewportInfo;
+  vk::PipelineInputAssemblyStateCreateInfo inputAssemblyInfo;
+  vk::PipelineRasterizationStateCreateInfo rasterizationInfo;
+  vk::PipelineMultisampleStateCreateInfo multisampleInfo;
+  vk::PipelineColorBlendAttachmentState colorBlendAttachment;
+  vk::PipelineColorBlendStateCreateInfo colorBlendInfo;
+  vk::PipelineDepthStencilStateCreateInfo depthStencilInfo;
+  std::vector<vk::DynamicState> dynamicStateEnables;
+  vk::PipelineDynamicStateCreateInfo dynamicStateInfo;
+  vk::Format colorAttachmentFormat = vk::Format::eUndefined;
+  vk::Format depthAttachmentFormat = vk::Format::eUndefined;
 };
 
 class VulkanPipeline {
@@ -36,8 +37,8 @@ public:
   VulkanPipeline(const VulkanPipeline &) = delete;
   VulkanPipeline &operator=(const VulkanPipeline &) = delete;
 
-  VkPipeline GetPipeline() const { return m_GraphicsPipeline; }
-  VkPipelineLayout GetPipelineLayout() const { return m_PipelineLayout; }
+  vk::Pipeline GetPipeline() const { return m_GraphicsPipeline; }
+  vk::PipelineLayout GetPipelineLayout() const { return m_PipelineLayout; }
 
   static void DefaultPipelineConfigInfo(PipelineConfigInfo &configInfo);
 
@@ -46,8 +47,8 @@ private:
 
 private:
   const std::unique_ptr<VulkanDevice> &m_Device;
-  VkPipeline m_GraphicsPipeline = VK_NULL_HANDLE;
-  VkPipelineLayout m_PipelineLayout = VK_NULL_HANDLE;
+  vk::Pipeline m_GraphicsPipeline = nullptr;
+  vk::PipelineLayout m_PipelineLayout = nullptr;
 };
 
 } // namespace mc
