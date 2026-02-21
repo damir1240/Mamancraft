@@ -4,7 +4,11 @@
 #include "Mamancraft/Renderer/Vulkan/VulkanShader.hpp"
 #include "Mamancraft/Renderer/VulkanContext.hpp"
 
+#include <SDL3/SDL_assert.h>
+
 #include <stdexcept>
+
+// SDL Assertion Handling is kept default for stability
 
 namespace mc {
 
@@ -31,7 +35,6 @@ void Application::Init() {
 
   if (!m_Window) {
     MC_CRITICAL("Failed to create SDL window: {0}", SDL_GetError());
-    SDL_Quit();
     throw std::runtime_error("SDL Window creation failed");
   }
 
@@ -94,13 +97,13 @@ void Application::Shutdown() {
   MC_INFO("Application::Shutdown() - Starting shutdown sequence");
 
   // CRITICAL ORDER: Destroy objects that use VMA allocator BEFORE VulkanContext
-  
+
   // 1. Renderer (contains command buffers and sync objects)
   if (m_Renderer) {
     MC_DEBUG("Application: Destroying renderer...");
     m_Renderer.reset();
   }
-  
+
   // 2. Pipeline (contains shader modules)
   if (m_Pipeline) {
     MC_DEBUG("Application: Destroying pipeline...");
@@ -110,23 +113,19 @@ void Application::Shutdown() {
   // 3. AssetManager - MUST be cleared before VulkanContext
   //    because meshes contain VulkanBuffers that use VMA allocator
   if (m_AssetManager) {
-    MC_DEBUG("Application: Clearing AssetManager (contains VMA-allocated buffers)...");
+    MC_DEBUG("Application: Clearing AssetManager (contains VMA-allocated "
+             "buffers)...");
     m_AssetManager->Clear(); // Explicitly clear caches to free VMA allocations
     MC_DEBUG("Application: Destroying AssetManager...");
     m_AssetManager.reset(); // Destructor will check if already cleared
   }
 
-  // 4. VulkanContext (contains VMA allocator - destroyed last among Vulkan objects)
+  // 4. VulkanContext (contains VMA allocator - destroyed last among Vulkan
+  // objects)
   if (m_VulkanContext) {
-    MC_DEBUG("Application: Destroying VulkanContext (will destroy VMA allocator)...");
+    MC_DEBUG("Application: Destroying VulkanContext (will destroy VMA "
+             "allocator)...");
     m_VulkanContext.reset();
-  }
-
-  // 5. SDL Window
-  if (m_Window) {
-    MC_DEBUG("Application: Destroying SDL window...");
-    SDL_DestroyWindow(m_Window);
-    m_Window = nullptr;
   }
 
   // 6. InputManager
@@ -134,11 +133,19 @@ void Application::Shutdown() {
     MC_DEBUG("Application: Destroying InputManager...");
     m_InputManager.reset();
   }
-  
-  // 7. SDL Quit
-  MC_DEBUG("Application: Calling SDL_Quit()...");
-  SDL_Quit();
-  
+
+  // 7. SDL Window
+  if (m_Window) {
+    MC_DEBUG("Application: Destroying SDL window...");
+    SDL_DestroyWindow(m_Window);
+    m_Window = nullptr;
+  }
+
+  // NOTE: SDL_Quit() is intentionally omitted here.
+  // It must be called AFTER the Application object is fully destroyed (in
+  // main.cpp). This prevents crashes where SDL unloads DLLs/memory hooks while
+  // C++ objects (like std::string in m_Config) are still being destroyed.
+
   MC_INFO("Application::Shutdown() - Shutdown completed successfully");
 }
 

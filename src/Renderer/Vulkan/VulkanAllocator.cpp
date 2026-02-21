@@ -25,6 +25,18 @@ VulkanAllocator::VulkanAllocator(vk::Instance instance,
 VulkanAllocator::~VulkanAllocator() {
   if (m_Allocator) {
     MC_DEBUG("VulkanAllocator: Destroying VMA allocator instance {}", (void*)m_Allocator);
+    
+    // Check for memory leaks before destroying
+    VmaTotalStatistics stats;
+    vmaCalculateStatistics(m_Allocator, &stats);
+    
+    if (stats.total.statistics.allocationCount > 0) {
+      MC_WARN("VulkanAllocator: {} allocations still exist before destroying allocator!", 
+              stats.total.statistics.allocationCount);
+      MC_WARN("VulkanAllocator: {} bytes still allocated", 
+              stats.total.statistics.allocationBytes);
+    }
+    
     vmaDestroyAllocator(m_Allocator);
     m_Allocator = nullptr;
     MC_INFO("VulkanAllocator: VMA allocator destroyed successfully");

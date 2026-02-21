@@ -71,6 +71,7 @@ private:
   const std::vector<const char *> m_DeviceExtensions = {
       VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
+  // Enable validation layers in Debug builds
 #ifdef NDEBUG
   const bool m_EnableValidationLayers = false;
 #else

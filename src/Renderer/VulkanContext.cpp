@@ -90,27 +90,32 @@ void VulkanContext::Shutdown() {
     m_ImmediateFence = nullptr;
   }
 
-  // 2. Command pool (depends on device)
-  MC_DEBUG("VulkanContext: Destroying command pool...");
-  m_CommandPool.reset();
+  // 2. Swapchain (depends on device and surface)
+  MC_DEBUG("VulkanContext: Destroying swapchain...");
+  m_Swapchain.reset();
 
-  // 3. Allocator (VMA - CRITICAL: must be destroyed AFTER all buffers are freed)
+  // 3. Allocator (VMA - CRITICAL: must be destroyed AFTER all buffers are
+  // freed)
   MC_DEBUG("VulkanContext: Destroying VMA allocator...");
   m_Allocator.reset();
   MC_DEBUG("VulkanContext: VMA allocator destroyed");
 
-  // 4. Swapchain (depends on device and surface)
-  MC_DEBUG("VulkanContext: Destroying swapchain...");
-  m_Swapchain.reset();
+  // 4. Command pool (MUST be destroyed AFTER all command buffers are freed)
+  //    Command buffers in VulkanRenderer must be destroyed before this
+  MC_DEBUG("VulkanContext: Destroying command pool...");
+  m_CommandPool.reset();
 
   // 5. Logical device
-  MC_DEBUG("VulkanContext: Destroying logical device...");
-  m_Device.reset();
+  if (m_Device) {
+    MC_DEBUG("VulkanContext: Destroying logical device...");
+    m_Device.reset();
+  }
 
   // 6. Surface (depends on instance)
-  if (m_Surface) {
+  if (m_Surface && m_Instance) {
     MC_DEBUG("VulkanContext: Destroying surface...");
-    m_Instance.destroySurfaceKHR(m_Surface);
+    SDL_Vulkan_DestroySurface(static_cast<VkInstance>(m_Instance),
+                              static_cast<VkSurfaceKHR>(m_Surface), nullptr);
     m_Surface = nullptr;
   }
 
@@ -129,7 +134,7 @@ void VulkanContext::Shutdown() {
     m_Instance.destroy();
     m_Instance = nullptr;
   }
-  
+
   MC_INFO("VulkanContext::Shutdown() - Vulkan cleanup completed");
 }
 
@@ -139,31 +144,31 @@ void VulkanContext::CreateInstance() {
     throw std::runtime_error("validation layers requested, but not available!");
   }
 
-  ApplicationInfo appInfo("Mamancraft", VK_MAKE_VERSION(1, 0, 0),
-                          "Mamancraft Engine", VK_MAKE_VERSION(1, 0, 0),
-                          VK_API_VERSION_1_4);
+  vk::ApplicationInfo appInfo("Mamancraft", VK_MAKE_VERSION(1, 0, 0),
+                              "Mamancraft Engine", VK_MAKE_VERSION(1, 0, 0),
+                              VK_API_VERSION_1_4);
 
-  InstanceCreateInfo createInfo;
+  vk::InstanceCreateInfo createInfo;
   createInfo.pApplicationInfo = &appInfo;
 
   auto extensions = GetRequiredExtensions();
   createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
   createInfo.ppEnabledExtensionNames = extensions.data();
 
-  DebugUtilsMessengerCreateInfoEXT debugCreateInfo;
+  vk::DebugUtilsMessengerCreateInfoEXT debugCreateInfo;
   if (m_EnableValidationLayers) {
     createInfo.enabledLayerCount =
         static_cast<uint32_t>(m_ValidationLayers.size());
     createInfo.ppEnabledLayerNames = m_ValidationLayers.data();
 
     debugCreateInfo.messageSeverity =
-        DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
-        DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
-        DebugUtilsMessageSeverityFlagBitsEXT::eError;
+        vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
+        vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
+        vk::DebugUtilsMessageSeverityFlagBitsEXT::eError;
     debugCreateInfo.messageType =
-        DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
-        DebugUtilsMessageTypeFlagBitsEXT::eValidation |
-        DebugUtilsMessageTypeFlagBitsEXT::ePerformance;
+        vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
+        vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation |
+        vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance;
     debugCreateInfo.pfnUserCallback =
         reinterpret_cast<vk::PFN_DebugUtilsMessengerCallbackEXT>(DebugCallback);
     createInfo.pNext = &debugCreateInfo;
@@ -213,6 +218,9 @@ std::vector<const char *> VulkanContext::GetRequiredExtensions() {
 
   std::vector<const char *> extensions(sdlExtensions,
                                        sdlExtensions + sdlExtensionCount);
+
+  // NOTE: In SDL3, SDL_Vulkan_GetInstanceExtensions returns memory managed by
+  // SDL. Do NOT free sdlExtensions.
 
   if (m_EnableValidationLayers) {
     extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
@@ -350,25 +358,21 @@ void VulkanContext::CreateLogicalDevice() {
     queueCreateInfos.push_back(queueCreateInfo);
   }
 
-  PhysicalDeviceFeatures deviceFeatures;
+  vk::PhysicalDeviceFeatures deviceFeatures;
 
   // Modern dynamic rendering features require Vulkan 1.3 or KHR extensions
-  // We will enable dynamic rendering here
-  PhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures;
-  dynamicRenderingFeatures.dynamicRendering = true;
+  // We are on Vulkan 1.4, so Dynamic Rendering is core in Vulkan 1.3 features
+  vk::PhysicalDeviceVulkan13Features features13;
+  features13.dynamicRendering = true;
 
-  DeviceCreateInfo createInfo;
+  vk::DeviceCreateInfo createInfo;
   createInfo.queueCreateInfoCount =
       static_cast<uint32_t>(queueCreateInfos.size());
   createInfo.pQueueCreateInfos = queueCreateInfos.data();
 
   createInfo.pEnabledFeatures = &deviceFeatures;
-  createInfo.pNext = &dynamicRenderingFeatures;
 
-  // We are on Vulkan 1.4, so Dynamic Rendering is core, but we can also request
-  // the Vulkan 1.3 feature structure
-  PhysicalDeviceVulkan13Features features13;
-  features13.dynamicRendering = true;
+  // Chain features
   createInfo.pNext = &features13;
 
   createInfo.enabledExtensionCount =

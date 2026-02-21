@@ -24,9 +24,13 @@ VulkanCommandPool::VulkanCommandPool(
 }
 
 VulkanCommandPool::~VulkanCommandPool() {
+  MC_DEBUG("VulkanCommandPool destructor: Destroying command pool {}", (void*)m_CommandPool);
   if (m_CommandPool) {
+    // Destroying the command pool automatically frees all command buffers allocated from it
     m_Device->GetLogicalDevice().destroyCommandPool(m_CommandPool);
+    m_CommandPool = nullptr;
   }
+  MC_DEBUG("VulkanCommandPool destructor: Completed");
 }
 
 std::unique_ptr<VulkanCommandBuffer>
@@ -65,6 +69,8 @@ VulkanCommandBuffer::VulkanCommandBuffer(
     std::vector<vk::CommandBuffer> buffers =
         m_Device->GetLogicalDevice().allocateCommandBuffers(allocInfo);
     m_CommandBuffer = buffers[0];
+    MC_TRACE("VulkanCommandBuffer: Allocated command buffer {} from pool {}", 
+             (void*)m_CommandBuffer, (void*)m_CommandPool);
   } catch (const vk::SystemError &e) {
     MC_CRITICAL("Failed to allocate command buffer! Error: {}", e.what());
     throw std::runtime_error("failed to allocate command buffer!");
@@ -72,10 +78,12 @@ VulkanCommandBuffer::VulkanCommandBuffer(
 }
 
 VulkanCommandBuffer::~VulkanCommandBuffer() {
-  if (m_CommandBuffer) {
-    m_Device->GetLogicalDevice().freeCommandBuffers(m_CommandPool,
-                                                    m_CommandBuffer);
-  }
+  // NOTE: Command buffers are automatically freed when their command pool is destroyed
+  // Explicitly freeing them here can cause heap corruption if the pool is already destroyed
+  // The Vulkan spec guarantees that destroying a command pool implicitly frees all command buffers
+  // allocated from it, so we don't need to (and shouldn't) free them manually
+  MC_TRACE("VulkanCommandBuffer destructor: Command buffer {} will be freed by pool destruction", 
+           (void*)m_CommandBuffer);
 }
 
 void VulkanCommandBuffer::Begin(vk::CommandBufferUsageFlags flags) {

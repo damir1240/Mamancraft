@@ -1,0 +1,3 @@
+Версия MSBuild 18.3.0-release-26070-10+3972042b7 для .NET Framework
+MSBUILD : error MSB1009: файл проекта не существует.
+Ключ: googletest.vcxproj

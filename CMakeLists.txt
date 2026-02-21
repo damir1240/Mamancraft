@@ -5,6 +5,14 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# CRITICAL: Use the same MSVC runtime library as SDL3
+# SDL3 is built as a shared library (SDL3.dll) so we must use the DLL CRT
+# to avoid cross-module heap corruption.
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    add_compile_options(/FS)
+endif()
+
 # Find Vulkan
 find_package(Vulkan 1.4 REQUIRED)
 

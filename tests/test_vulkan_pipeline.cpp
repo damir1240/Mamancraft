@@ -57,7 +57,8 @@ protected:
 
 TEST_F(VulkanPipelineTest, CreateShaderModule) {
   const char *basePath = SDL_GetBasePath();
-  std::string shadersPath = std::string(basePath ? basePath : "") + "shaders/";
+  std::string shadersPath =
+      std::string(basePath ? basePath : "") + "assets/shaders/";
 
   // Test loading standard shaders
   EXPECT_NO_THROW({
@@ -69,7 +70,8 @@ TEST_F(VulkanPipelineTest, CreateShaderModule) {
 
 TEST_F(VulkanPipelineTest, CreateVulkanPipeline) {
   const char *basePath = SDL_GetBasePath();
-  std::string shadersPath = std::string(basePath ? basePath : "") + "shaders/";
+  std::string shadersPath =
+      std::string(basePath ? basePath : "") + "assets/shaders/";
 
   mc::VulkanShader vertShader(context->GetDevice(),
                               shadersPath + "triangle.vert.spv");
