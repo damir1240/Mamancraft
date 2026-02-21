@@ -66,10 +66,18 @@ void VulkanContext::Init() {
   CreateSwapchain();
   CreateAllocator();
   CreateCommandPool();
+
+  vk::FenceCreateInfo fenceCreateInfo;
+  fenceCreateInfo.flags = vk::FenceCreateFlagBits::eSignaled;
+  m_ImmediateFence = m_Device->GetLogicalDevice().createFence(fenceCreateInfo);
 }
 
 void VulkanContext::Shutdown() {
   MC_INFO("Shutting down Vulkan Context");
+
+  if (m_ImmediateFence) {
+    m_Device->GetLogicalDevice().destroyFence(m_ImmediateFence);
+  }
 
   m_CommandPool.reset();
   m_Allocator.reset();
@@ -403,17 +411,13 @@ void VulkanContext::ImmediateSubmit(
   vk::CommandBuffer cmdBuf = commandBuffer->GetCommandBuffer();
   submitInfo.pCommandBuffers = &cmdBuf;
 
-  vk::FenceCreateInfo fenceCreateInfo;
-  vk::Fence fence = m_Device->GetLogicalDevice().createFence(fenceCreateInfo);
-
-  m_Device->GetGraphicsQueue().submit(submitInfo, fence);
+  (void)m_Device->GetLogicalDevice().resetFences(1, &m_ImmediateFence);
+  m_Device->GetGraphicsQueue().submit(submitInfo, m_ImmediateFence);
 
   if (m_Device->GetLogicalDevice().waitForFences(
-          fence, VK_TRUE, 10000000000ULL) != vk::Result::eSuccess) {
+          m_ImmediateFence, VK_TRUE, 10000000000ULL) != vk::Result::eSuccess) {
     MC_ERROR("ImmediateSubmit: wait for fence failed or timed out!");
   }
-
-  m_Device->GetLogicalDevice().destroyFence(fence);
 }
 
 } // namespace mc

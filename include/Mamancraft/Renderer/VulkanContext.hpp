@@ -66,6 +66,8 @@ private:
   std::unique_ptr<VulkanAllocator> m_Allocator;
   std::unique_ptr<VulkanCommandPool> m_CommandPool;
 
+  vk::Fence m_ImmediateFence = nullptr;
+
   const std::vector<const char *> m_DeviceExtensions = {
       VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 

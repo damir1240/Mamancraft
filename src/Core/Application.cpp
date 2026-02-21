@@ -54,52 +54,16 @@ void Application::Init() {
       m_VulkanContext->GetDevice(), vertShader, fragShader, pipelineConfig);
   m_Renderer = std::make_unique<VulkanRenderer>(*m_VulkanContext);
 
-  const std::vector<Vertex> vertices = {
+  VulkanMesh::Builder meshBuilder;
+  meshBuilder.vertices = {
       {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}}, // Top Left
       {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},  // Top Right
       {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},   // Bottom Right
       {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}   // Bottom Left
   };
+  meshBuilder.indices = {0, 1, 2, 2, 3, 0};
 
-  const std::vector<uint16_t> indices = {0, 1, 2, 2, 3, 0};
-  m_IndexCount = static_cast<uint32_t>(indices.size());
-
-  vk::DeviceSize vertexBufferSize = sizeof(vertices[0]) * vertices.size();
-  vk::DeviceSize indexBufferSize = sizeof(indices[0]) * indices.size();
-
-  // Create Vertex Buffer
-  VulkanBuffer stagingBuffer(
-      m_VulkanContext->GetAllocator()->GetAllocator(), vertexBufferSize, 1,
-      vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY);
-  stagingBuffer.Map();
-  stagingBuffer.WriteToBuffer((void *)vertices.data(), vertexBufferSize);
-  stagingBuffer.Unmap();
-
-  m_VertexBuffer = std::make_unique<VulkanBuffer>(
-      m_VulkanContext->GetAllocator()->GetAllocator(), vertexBufferSize, 1,
-      vk::BufferUsageFlagBits::eVertexBuffer |
-          vk::BufferUsageFlagBits::eTransferDst,
-      VMA_MEMORY_USAGE_GPU_ONLY);
-
-  VulkanBuffer::CopyBuffer(*m_VulkanContext, stagingBuffer.GetBuffer(),
-                           m_VertexBuffer->GetBuffer(), vertexBufferSize);
-
-  // Create Index Buffer
-  VulkanBuffer indexStagingBuffer(
-      m_VulkanContext->GetAllocator()->GetAllocator(), indexBufferSize, 1,
-      vk::BufferUsageFlagBits::eTransferSrc, VMA_MEMORY_USAGE_CPU_ONLY);
-  indexStagingBuffer.Map();
-  indexStagingBuffer.WriteToBuffer((void *)indices.data(), indexBufferSize);
-  indexStagingBuffer.Unmap();
-
-  m_IndexBuffer = std::make_unique<VulkanBuffer>(
-      m_VulkanContext->GetAllocator()->GetAllocator(), indexBufferSize, 1,
-      vk::BufferUsageFlagBits::eIndexBuffer |
-          vk::BufferUsageFlagBits::eTransferDst,
-      VMA_MEMORY_USAGE_GPU_ONLY);
-
-  VulkanBuffer::CopyBuffer(*m_VulkanContext, indexStagingBuffer.GetBuffer(),
-                           m_IndexBuffer->GetBuffer(), indexBufferSize);
+  m_Mesh = std::make_unique<VulkanMesh>(*m_VulkanContext, meshBuilder);
 
   m_IsRunning = true;
   MC_INFO("Application initialized successfully.");
@@ -110,8 +74,7 @@ void Application::Shutdown() {
 
   m_Renderer.reset();
   m_Pipeline.reset();
-  m_VertexBuffer.reset();
-  m_IndexBuffer.reset();
+  m_Mesh.reset();
   m_VulkanContext.reset();
 
   if (m_Window) {
@@ -159,8 +122,7 @@ void Application::Run() {
 
     if (auto commandBuffer = m_Renderer->BeginFrame()) {
       m_Renderer->BeginRenderPass(commandBuffer);
-      m_Renderer->Draw(commandBuffer, *m_Pipeline, m_VertexBuffer->GetBuffer(),
-                       m_IndexBuffer->GetBuffer(), m_IndexCount);
+      m_Renderer->DrawMesh(commandBuffer, *m_Pipeline, *m_Mesh);
       m_Renderer->EndRenderPass(commandBuffer);
       m_Renderer->EndFrame();
     }

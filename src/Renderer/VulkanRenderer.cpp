@@ -1,6 +1,7 @@
 #include "Mamancraft/Renderer/VulkanRenderer.hpp"
 #include "Mamancraft/Core/Logger.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanCommandPool.hpp"
+#include "Mamancraft/Renderer/Vulkan/VulkanMesh.hpp"
 
 #include <stdexcept>
 
@@ -294,9 +295,17 @@ void VulkanRenderer::Draw(vk::CommandBuffer commandBuffer,
   vk::Buffer vertexBuffers[] = {vertexBuffer};
   vk::DeviceSize offsets[] = {0};
   commandBuffer.bindVertexBuffers(0, 1, vertexBuffers, offsets);
-  commandBuffer.bindIndexBuffer(indexBuffer, 0, vk::IndexType::eUint16);
+  commandBuffer.bindIndexBuffer(indexBuffer, 0, vk::IndexType::eUint32);
 
   commandBuffer.drawIndexed(indexCount, 1, 0, 0, 0);
+}
+
+void VulkanRenderer::DrawMesh(vk::CommandBuffer commandBuffer,
+                              VulkanPipeline &pipeline, VulkanMesh &mesh) {
+  commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
+                             pipeline.GetPipeline());
+  mesh.Bind(commandBuffer);
+  mesh.Draw(commandBuffer);
 }
 
 } // namespace mc

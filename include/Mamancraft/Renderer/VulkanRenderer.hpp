@@ -9,6 +9,8 @@
 
 namespace mc {
 
+class VulkanMesh;
+
 class VulkanRenderer {
 public:
   VulkanRenderer(VulkanContext &context);
@@ -26,6 +28,9 @@ public:
   void Draw(vk::CommandBuffer commandBuffer, VulkanPipeline &pipeline,
             vk::Buffer vertexBuffer, vk::Buffer indexBuffer,
             uint32_t indexCount);
+
+  void DrawMesh(vk::CommandBuffer commandBuffer, VulkanPipeline &pipeline,
+                VulkanMesh &mesh);
 
 private:
   void CreateSyncObjects();
