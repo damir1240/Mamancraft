@@ -3,6 +3,9 @@
 #include "Mamancraft/Core/Logger.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanShader.hpp"
 #include "Mamancraft/Renderer/VulkanContext.hpp"
+#include "Mamancraft/Voxel/BlockRegistry.hpp"
+#include "Mamancraft/Voxel/Chunk.hpp"
+#include "Mamancraft/Voxel/VoxelMesher.hpp"
 
 #include <SDL3/SDL_assert.h>
 #include <chrono>
@@ -43,11 +46,13 @@ void Application::Init() {
 
   // Set Default Key Bindings
   m_InputManager->BindAction("Jump", SDL_SCANCODE_SPACE);
+  m_InputManager->BindAction("Descend", SDL_SCANCODE_LSHIFT);
   m_InputManager->BindAction("MoveForward", SDL_SCANCODE_W);
   m_InputManager->BindAction("MoveBackward", SDL_SCANCODE_S);
   m_InputManager->BindAction("MoveLeft", SDL_SCANCODE_A);
   m_InputManager->BindAction("MoveRight", SDL_SCANCODE_D);
   m_InputManager->BindAction("Menu", SDL_SCANCODE_ESCAPE);
+  m_InputManager->BindAction("ToggleCursor", SDL_SCANCODE_M);
   m_InputManager->BindMouseButton("Interact", SDL_BUTTON_LEFT);
 
   // Load User Configuration (Overrides Defaults)
@@ -86,20 +91,33 @@ void Application::Init() {
   m_Pipeline = std::make_unique<VulkanPipeline>(
       m_VulkanContext->GetDevice(), *vertShader, *fragShader, pipelineConfig);
 
-  VulkanMesh::Builder meshBuilder;
-  // 3D Cube-like triangle or quad
-  meshBuilder.vertices = {{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
-                          {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}},
-                          {{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
-                          {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}}};
-  meshBuilder.indices = {0, 1, 2, 2, 3, 0};
+  // --- Create Chunk ---
+  Chunk chunk({0, 0, 0});
+  for (int x = 0; x < Chunk::SIZE; x++) {
+    for (int z = 0; z < Chunk::SIZE; z++) {
+      // Create a wavy terrain for testing
+      int height =
+          static_cast<int>(5.0f + 3.0f * sin(x * 0.2f) * cos(z * 0.2f));
+      for (int y = 0; y < height; y++) {
+        BlockType type = BlockType::Stone;
+        if (y == height - 1)
+          type = BlockType::Grass;
+        else if (y > height - 4)
+          type = BlockType::Dirt;
 
-  m_TriangleMesh = m_AssetManager->CreateMesh("triangle", meshBuilder);
+        chunk.SetBlock(x, y, z, {type});
+      }
+    }
+  }
 
-  m_Camera.SetPosition({0.0f, 0.0f, 2.0f});
+  VulkanMesh::Builder chunkMesh = VoxelMesher::GenerateMesh(chunk);
+  m_ChunkMesh = m_AssetManager->CreateMesh("chunk_0_0_0", chunkMesh);
+
+  m_Camera.SetPosition(
+      {Chunk::SIZE / 2.0f, Chunk::SIZE / 2.0f + 10.0f, Chunk::SIZE * 1.5f});
   m_Camera.SetPerspective(glm::radians(45.0f),
                           (float)m_Config.width / (float)m_Config.height, 0.1f,
-                          100.0f);
+                          1000.0f);
 
   m_IsRunning = true;
   MC_INFO("Application initialized successfully.");
@@ -148,7 +166,7 @@ void Application::Update(float dt) {
   if (m_InputManager->IsActionPressed("Menu"))
     m_IsRunning = false;
 
-  if (m_InputManager->IsKeyPressed(SDL_SCANCODE_M)) {
+  if (m_InputManager->IsActionPressed("ToggleCursor")) {
     m_InputManager->SetCursorLocking(m_Window,
                                      !m_InputManager->IsCursorLocked());
   }
@@ -172,6 +190,8 @@ void Application::Update(float dt) {
     pos += flatRight * moveSpeed;
   if (m_InputManager->IsActionHeld("Jump"))
     pos.y += moveSpeed;
+  if (m_InputManager->IsActionHeld("Descend"))
+    pos.y -= moveSpeed;
 
   if (m_InputManager->IsCursorLocked()) {
     glm::vec2 delta = m_InputManager->GetMouseDelta();
@@ -215,9 +235,9 @@ void Application::Run() {
 
       m_Renderer->BeginRenderPass(commandBuffer);
 
-      if (auto mesh = m_AssetManager->GetMesh(m_TriangleMesh)) {
+      if (auto mesh = m_AssetManager->GetMesh(m_ChunkMesh)) {
         PushConstantData push{};
-        push.model = glm::mat4(1.0f); // Static triangle for now
+        push.model = glm::mat4(1.0f); // Default identity
         m_Renderer->DrawMesh(commandBuffer, *m_Pipeline, *mesh, push);
       }
 

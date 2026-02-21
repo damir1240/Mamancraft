@@ -47,7 +47,7 @@ private:
 
   // Rendering
   std::unique_ptr<VulkanPipeline> m_Pipeline;
-  AssetHandle m_TriangleMesh;
+  AssetHandle m_ChunkMesh;
 
   Camera m_Camera;
 
