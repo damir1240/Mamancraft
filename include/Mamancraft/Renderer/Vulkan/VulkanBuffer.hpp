@@ -1,10 +1,7 @@
 #pragma once
 
-#include "Mamancraft/Renderer/Vulkan/VulkanCommandPool.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanCore.hpp"
-#include "Mamancraft/Renderer/Vulkan/VulkanDevice.hpp"
-
-#include <memory>
+#include "Mamancraft/Renderer/VulkanContext.hpp"
 
 namespace mc {
 
@@ -38,10 +35,8 @@ public:
   vk::BufferUsageFlags GetUsageFlags() const { return m_UsageFlags; }
   vk::DeviceSize GetBufferSize() const { return m_BufferSize; }
 
-  static void CopyBuffer(const std::unique_ptr<VulkanDevice> &device,
-                         const std::unique_ptr<VulkanCommandPool> &commandPool,
-                         vk::Buffer srcBuffer, vk::Buffer dstBuffer,
-                         vk::DeviceSize size);
+  static void CopyBuffer(VulkanContext &context, vk::Buffer srcBuffer,
+                         vk::Buffer dstBuffer, vk::DeviceSize size);
 
 private:
   static vk::DeviceSize GetAlignment(vk::DeviceSize instanceSize,

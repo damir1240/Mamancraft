@@ -12,7 +12,6 @@
 #include "Mamancraft/Renderer/VulkanRenderer.hpp"
 #include <vector>
 
-
 namespace mc {
 struct AppConfig {
   std::string title = "Mamancraft";
@@ -45,6 +44,8 @@ private:
   std::unique_ptr<VulkanPipeline> m_Pipeline;
   std::unique_ptr<VulkanRenderer> m_Renderer;
   std::unique_ptr<VulkanBuffer> m_VertexBuffer;
+  std::unique_ptr<VulkanBuffer> m_IndexBuffer;
+  uint32_t m_IndexCount = 0;
 };
 
 } // namespace mc

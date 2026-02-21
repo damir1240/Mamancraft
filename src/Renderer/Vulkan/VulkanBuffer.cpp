@@ -95,34 +95,16 @@ vk::Result VulkanBuffer::Invalidate(vk::DeviceSize size,
   return vk::Result::eSuccess;
 }
 
-void VulkanBuffer::CopyBuffer(
-    const std::unique_ptr<VulkanDevice> &device,
-    const std::unique_ptr<VulkanCommandPool> &commandPool, vk::Buffer srcBuffer,
-    vk::Buffer dstBuffer, vk::DeviceSize size) {
+void VulkanBuffer::CopyBuffer(VulkanContext &context, vk::Buffer srcBuffer,
+                              vk::Buffer dstBuffer, vk::DeviceSize size) {
+  context.ImmediateSubmit([=](vk::CommandBuffer commandBuffer) {
+    vk::BufferCopy copyRegion;
+    copyRegion.srcOffset = 0;
+    copyRegion.dstOffset = 0;
+    copyRegion.size = size;
 
-  std::unique_ptr<VulkanCommandBuffer> commandBuffer =
-      commandPool->AllocateCommandBuffer(true);
-
-  commandBuffer->Begin();
-
-  vk::BufferCopy copyRegion;
-  copyRegion.srcOffset = 0;
-  copyRegion.dstOffset = 0;
-  copyRegion.size = size;
-
-  commandBuffer->GetCommandBuffer().copyBuffer(srcBuffer, dstBuffer, 1,
-                                               &copyRegion);
-
-  commandBuffer->End();
-
-  vk::SubmitInfo submitInfo;
-  submitInfo.commandBufferCount = 1;
-
-  vk::CommandBuffer cmdBufHandle = commandBuffer->GetCommandBuffer();
-  submitInfo.pCommandBuffers = &cmdBufHandle;
-
-  device->GetGraphicsQueue().submit(submitInfo, nullptr);
-  device->GetGraphicsQueue().waitIdle();
+    commandBuffer.copyBuffer(srcBuffer, dstBuffer, 1, &copyRegion);
+  });
 }
 
 } // namespace mc

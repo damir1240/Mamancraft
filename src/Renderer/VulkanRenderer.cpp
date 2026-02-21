@@ -286,15 +286,17 @@ void VulkanRenderer::EndRenderPass(vk::CommandBuffer commandBuffer) {
 }
 
 void VulkanRenderer::Draw(vk::CommandBuffer commandBuffer,
-                          VulkanPipeline &pipeline, vk::Buffer vertexBuffer) {
+                          VulkanPipeline &pipeline, vk::Buffer vertexBuffer,
+                          vk::Buffer indexBuffer, uint32_t indexCount) {
   commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
                              pipeline.GetPipeline());
 
   vk::Buffer vertexBuffers[] = {vertexBuffer};
   vk::DeviceSize offsets[] = {0};
   commandBuffer.bindVertexBuffers(0, 1, vertexBuffers, offsets);
+  commandBuffer.bindIndexBuffer(indexBuffer, 0, vk::IndexType::eUint16);
 
-  commandBuffer.draw(3, 1, 0, 0); // 3 vertices, 1 instance
+  commandBuffer.drawIndexed(indexCount, 1, 0, 0, 0);
 }
 
 } // namespace mc

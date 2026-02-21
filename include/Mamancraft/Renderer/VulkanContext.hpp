@@ -6,9 +6,9 @@
 #include "Mamancraft/Renderer/Vulkan/VulkanDevice.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanSwapchain.hpp"
 #include <SDL3/SDL.h>
+#include <functional>
 #include <memory>
 #include <vector>
-
 
 namespace mc {
 
@@ -32,6 +32,8 @@ public:
   const std::unique_ptr<VulkanCommandPool> &GetCommandPool() const {
     return m_CommandPool;
   }
+
+  void ImmediateSubmit(std::function<void(vk::CommandBuffer)> &&func);
 
 private:
   void Init();

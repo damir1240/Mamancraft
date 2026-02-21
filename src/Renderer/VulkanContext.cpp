@@ -389,4 +389,31 @@ void VulkanContext::CreateCommandPool() {
       vk::CommandPoolCreateFlagBits::eResetCommandBuffer);
 }
 
+void VulkanContext::ImmediateSubmit(
+    std::function<void(vk::CommandBuffer)> &&func) {
+  std::unique_ptr<VulkanCommandBuffer> commandBuffer =
+      m_CommandPool->AllocateCommandBuffer(true);
+
+  commandBuffer->Begin(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+  func(commandBuffer->GetCommandBuffer());
+  commandBuffer->End();
+
+  vk::SubmitInfo submitInfo;
+  submitInfo.commandBufferCount = 1;
+  vk::CommandBuffer cmdBuf = commandBuffer->GetCommandBuffer();
+  submitInfo.pCommandBuffers = &cmdBuf;
+
+  vk::FenceCreateInfo fenceCreateInfo;
+  vk::Fence fence = m_Device->GetLogicalDevice().createFence(fenceCreateInfo);
+
+  m_Device->GetGraphicsQueue().submit(submitInfo, fence);
+
+  if (m_Device->GetLogicalDevice().waitForFences(
+          fence, VK_TRUE, 10000000000ULL) != vk::Result::eSuccess) {
+    MC_ERROR("ImmediateSubmit: wait for fence failed or timed out!");
+  }
+
+  m_Device->GetLogicalDevice().destroyFence(fence);
+}
+
 } // namespace mc

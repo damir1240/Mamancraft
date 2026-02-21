@@ -24,7 +24,8 @@ public:
   void EndRenderPass(vk::CommandBuffer commandBuffer);
 
   void Draw(vk::CommandBuffer commandBuffer, VulkanPipeline &pipeline,
-            vk::Buffer vertexBuffer);
+            vk::Buffer vertexBuffer, vk::Buffer indexBuffer,
+            uint32_t indexCount);
 
 private:
   void CreateSyncObjects();
