@@ -93,12 +93,8 @@ void Application::Init() {
 void Application::Shutdown() {
   MC_INFO("Shutting down Application.");
 
-  // 1. Wait for GPU idle (Crucial Best Practice)
-  if (m_VulkanContext && m_VulkanContext->GetDevice()) {
-    m_VulkanContext->GetDevice()->GetLogicalDevice().waitIdle();
-  }
-
-  // 2. Destroy objects in reverse order of creation
+  // Destroy objects in reverse order of creation
+  // VulkanContext::Shutdown() will call waitIdle() internally
   m_Renderer.reset();
   m_Pipeline.reset();
 

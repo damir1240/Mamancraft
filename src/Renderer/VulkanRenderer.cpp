@@ -15,15 +15,27 @@ VulkanRenderer::VulkanRenderer(VulkanContext &context) : m_Context(context) {
 VulkanRenderer::~VulkanRenderer() {
   vk::Device device = m_Context.GetDevice()->GetLogicalDevice();
 
+  // Wait for all operations to complete before cleanup
   device.waitIdle();
 
+  // Explicitly clear command buffers BEFORE destroying sync objects
+  // This ensures proper destruction order and prevents heap corruption
+  m_CommandBuffers.clear();
+
+  // Destroy synchronization primitives
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    device.destroySemaphore(m_ImageAvailableSemaphores[i]);
-    device.destroyFence(m_InFlightFences[i]);
+    if (m_ImageAvailableSemaphores[i]) {
+      device.destroySemaphore(m_ImageAvailableSemaphores[i]);
+    }
+    if (m_InFlightFences[i]) {
+      device.destroyFence(m_InFlightFences[i]);
+    }
   }
 
   for (auto sem : m_RenderFinishedSemaphores) {
-    device.destroySemaphore(sem);
+    if (sem) {
+      device.destroySemaphore(sem);
+    }
   }
 }
 

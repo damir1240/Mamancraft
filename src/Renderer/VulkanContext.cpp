@@ -75,27 +75,48 @@ void VulkanContext::Init() {
 void VulkanContext::Shutdown() {
   MC_INFO("Shutting down Vulkan Context");
 
-  if (m_ImmediateFence) {
-    m_Device->GetLogicalDevice().destroyFence(m_ImmediateFence);
+  // Best Practice: Wait for device to be idle before destroying resources
+  if (m_Device) {
+    m_Device->GetLogicalDevice().waitIdle();
   }
 
+  // Destroy resources in reverse order of creation
+  // 1. Immediate fence (created last in Init)
+  if (m_ImmediateFence && m_Device) {
+    m_Device->GetLogicalDevice().destroyFence(m_ImmediateFence);
+    m_ImmediateFence = nullptr;
+  }
+
+  // 2. Command pool (depends on device)
   m_CommandPool.reset();
+
+  // 3. Allocator (VMA - must be destroyed before device)
   m_Allocator.reset();
+
+  // 4. Swapchain (depends on device and surface)
   m_Swapchain.reset();
+
+  // 5. Logical device
   m_Device.reset();
 
+  // 6. Surface (depends on instance)
   if (m_Surface) {
     m_Instance.destroySurfaceKHR(m_Surface);
+    m_Surface = nullptr;
   }
 
+  // 7. Debug messenger (depends on instance)
   if (m_EnableValidationLayers && m_DebugMessenger) {
     DestroyDebugUtilsMessengerEXT(
         static_cast<VkInstance>(m_Instance),
         static_cast<VkDebugUtilsMessengerEXT>(m_DebugMessenger), nullptr);
+    m_DebugMessenger = nullptr;
   }
 
+  // 8. Instance (destroyed last)
   if (m_Instance) {
     m_Instance.destroy();
+    m_Instance = nullptr;
   }
 }
 
