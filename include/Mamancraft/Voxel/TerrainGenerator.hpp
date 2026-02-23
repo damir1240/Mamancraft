@@ -1,12 +1,12 @@
 #pragma once
 
+#include "Mamancraft/Voxel/Biome.hpp"
 #include "Mamancraft/Voxel/Chunk.hpp"
 
 namespace mc {
 
 /**
  * @brief Abstract base for terrain generation.
- * Follows C++20 best practices (stateless where possible).
  */
 class TerrainGenerator {
 public:
@@ -19,8 +19,11 @@ public:
 };
 
 /**
- * @brief Advanced Terrain Generator using FastNoiseLite.
- * Implements multi-layered noise for majestic terrains.
+ * @brief Advanced Terrain Generator with biome support.
+ *
+ * Uses temperature/humidity noise for biome selection (Whittaker-style),
+ * multi-layered noise for terrain shape, and procedural tree placement.
+ * Transitions between biomes are smooth due to continuous noise.
  */
 class AdvancedTerrainGenerator : public TerrainGenerator {
 public:
@@ -31,9 +34,21 @@ public:
 private:
   uint32_t m_Seed;
 
-  // Internal methods for features (placeholders for now)
-  float GetHeight(float x, float z) const;
-  BlockType GetBiomeAt(float x, float z) const;
+  // Biome selection based on temperature/humidity noise
+  BiomeType GetBiome(float temperature, float humidity) const;
+
+  // Height calculation considering biome influence
+  float GetTerrainHeight(float baseVal, float detailVal, float mountainVal,
+                         BiomeType biome) const;
+
+  // Surface block based on biome and height
+  BlockType GetSurfaceBlock(BiomeType biome, int worldY,
+                            int terrainHeight) const;
+
+  // Deterministic tree placement check
+  bool ShouldPlaceTree(int worldX, int worldZ, BiomeType biome) const;
+
+  // Cave generation placeholder
   bool HasCaveAt(float x, float y, float z) const;
 };
 

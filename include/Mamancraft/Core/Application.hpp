@@ -57,6 +57,7 @@ private:
   std::unique_ptr<TaskSystem> m_TaskSystem;
 
   Camera m_Camera;
+  float m_FlightSpeed = 5.0f; // Default flight speed (blocks/sec)
 
   bool m_IsRunning = false;
 };

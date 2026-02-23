@@ -53,6 +53,11 @@ void Application::Init() {
   m_InputManager->BindAction("MoveRight", SDL_SCANCODE_D);
   m_InputManager->BindAction("Menu", SDL_SCANCODE_ESCAPE);
   m_InputManager->BindAction("ToggleCursor", SDL_SCANCODE_M);
+  m_InputManager->BindAction("Speed1", SDL_SCANCODE_1);
+  m_InputManager->BindAction("Speed2", SDL_SCANCODE_2);
+  m_InputManager->BindAction("Speed3", SDL_SCANCODE_3);
+  m_InputManager->BindAction("Speed4", SDL_SCANCODE_4);
+  m_InputManager->BindAction("Speed5", SDL_SCANCODE_5);
   m_InputManager->BindMouseButton("Interact", SDL_BUTTON_LEFT);
 
   // Load User Configuration (Overrides Defaults)
@@ -144,8 +149,10 @@ void Application::Init() {
 void Application::Shutdown() {
   MC_INFO("Application::Shutdown() - Starting shutdown sequence");
 
-  // CRITICAL: Stop TaskSystem FIRST to join all worker threads.
-  // Workers reference m_World->m_Generator, so World must still be alive.
+  // CRITICAL: Signal world to abort in-flight generation tasks,
+  // then stop TaskSystem. This makes shutdown near-instant.
+  if (m_World)
+    m_World->SignalShutdown();
   if (m_TaskSystem)
     m_TaskSystem.reset();
 
@@ -198,7 +205,7 @@ void Application::Update(float dt) {
                                      !m_InputManager->IsCursorLocked());
   }
 
-  float moveSpeed = 5.0f * dt;
+  float moveSpeed = m_FlightSpeed * dt;
   glm::vec3 pos = m_Camera.GetPosition();
   glm::vec3 rot = m_Camera.GetRotation();
 
@@ -219,6 +226,18 @@ void Application::Update(float dt) {
     pos.y += moveSpeed;
   if (m_InputManager->IsActionHeld("Descend"))
     pos.y -= moveSpeed;
+
+  // Flight speed control (keys 1-5)
+  if (m_InputManager->IsActionPressed("Speed1"))
+    m_FlightSpeed = 2.0f;
+  if (m_InputManager->IsActionPressed("Speed2"))
+    m_FlightSpeed = 5.0f;
+  if (m_InputManager->IsActionPressed("Speed3"))
+    m_FlightSpeed = 15.0f;
+  if (m_InputManager->IsActionPressed("Speed4"))
+    m_FlightSpeed = 50.0f;
+  if (m_InputManager->IsActionPressed("Speed5"))
+    m_FlightSpeed = 200.0f;
 
   if (m_InputManager->IsCursorLocked()) {
     glm::vec2 delta = m_InputManager->GetMouseDelta();

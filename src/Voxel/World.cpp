@@ -96,9 +96,23 @@ void World::RequestChunk(const glm::ivec3 &position) {
 
   // Submit task to background threads
   m_TaskSystem.Enqueue([this, position]() {
+    // EARLY ABORT: if shutting down, skip all work
+    if (m_ShuttingDown.load(std::memory_order_acquire)) {
+      std::lock_guard lock(m_LoadingMutex);
+      m_LoadingChunks.erase(position);
+      return;
+    }
+
     // 1. Generate Chunk Data
     auto chunk = std::make_shared<Chunk>(position);
     m_Generator->Generate(*chunk);
+
+    // Check again after heavy generation step
+    if (m_ShuttingDown.load(std::memory_order_acquire)) {
+      std::lock_guard lock(m_LoadingMutex);
+      m_LoadingChunks.erase(position);
+      return;
+    }
 
     // 2. Add to world map
     {
@@ -108,6 +122,13 @@ void World::RequestChunk(const glm::ivec3 &position) {
 
     // 3. Generate Mesh (Greedy Meshing)
     VulkanMesh::Builder builder = VoxelMesher::GenerateMesh(*chunk);
+
+    // Check again after meshing
+    if (m_ShuttingDown.load(std::memory_order_acquire)) {
+      std::lock_guard lock(m_LoadingMutex);
+      m_LoadingChunks.erase(position);
+      return;
+    }
 
     // 4. Send to pending upload queue
     {

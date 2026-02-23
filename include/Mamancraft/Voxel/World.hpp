@@ -5,6 +5,8 @@
 #include "Mamancraft/Voxel/Chunk.hpp"
 #include "Mamancraft/Voxel/TerrainGenerator.hpp"
 
+#include <atomic>
+
 #include <glm/gtx/hash.hpp>
 #include <memory>
 #include <mutex>
@@ -27,6 +29,11 @@ class World {
 public:
   World(std::unique_ptr<TerrainGenerator> generator, TaskSystem &taskSystem);
   ~World() = default;
+
+  /// Signal that shutdown is in progress — in-flight tasks will abort early.
+  void SignalShutdown() {
+    m_ShuttingDown.store(true, std::memory_order_release);
+  }
 
   /**
    * @brief Update world state (e.g., load/unload chunks based on position).
@@ -54,7 +61,7 @@ private:
   std::unique_ptr<TerrainGenerator> m_Generator;
   TaskSystem &m_TaskSystem;
 
-  int m_ViewDistance = 5; // Default radius in chunks (~73 columns at r=5)
+  int m_ViewDistance = 32; // Default radius in chunks (~73 columns at r=5)
 
   std::unordered_map<glm::ivec3, std::shared_ptr<Chunk>> m_Chunks;
   mutable std::shared_mutex m_WorldMutex;
@@ -66,6 +73,9 @@ private:
   // Track which chunks are currently being processed to avoid duplicate tasks
   std::unordered_set<glm::ivec3> m_LoadingChunks;
   std::mutex m_LoadingMutex;
+
+  // Shutdown flag: checked by in-flight tasks for early abort
+  std::atomic<bool> m_ShuttingDown{false};
 };
 
 } // namespace mc
