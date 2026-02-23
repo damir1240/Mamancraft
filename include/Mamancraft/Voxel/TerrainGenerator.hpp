@@ -37,9 +37,14 @@ private:
   // Biome selection based on temperature/humidity noise
   BiomeType GetBiome(float temperature, float humidity) const;
 
-  // Height calculation considering biome influence
+  // Height calculation considering biome influence (legacy, single-biome)
   float GetTerrainHeight(float baseVal, float detailVal, float mountainVal,
                          BiomeType biome) const;
+
+  // Height calculation with smooth blending between all biomes (preferred)
+  float GetTerrainHeightBlended(float baseVal, float detailVal,
+                                float mountainVal, float temperature,
+                                float humidity) const;
 
   // Surface block based on biome and height
   BlockType GetSurfaceBlock(BiomeType biome, int worldY,

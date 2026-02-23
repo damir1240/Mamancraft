@@ -15,54 +15,79 @@ AdvancedTerrainGenerator::AdvancedTerrainGenerator(uint32_t seed)
 
 BiomeType AdvancedTerrainGenerator::GetBiome(float temperature,
                                              float humidity) const {
-  // Classification: balanced distribution
-  // OakForest is common but not overwhelming
-  // Plains and Mountains get more space
-  //
-  // temperature controls "elevation tendency"
-  // humidity controls "vegetation density"
-
-  // Mountains: moderate threshold → noticeable but not dominant
-  if (temperature > 0.35f) {
+  // Used for tree placement and surface block logic only.
+  // Terrain HEIGHT uses smooth blending (see GetTerrainHeight below).
+  if (temperature > 0.35f)
     return BiomeType::Mountain;
-  }
-  // Plains: when temperature OR humidity is low → decent coverage
-  if (temperature < -0.2f || humidity < -0.3f) {
+  if (temperature < -0.2f || humidity < -0.3f)
     return BiomeType::Plains;
-  }
-  // Forest: moderate temperature + decent humidity
   return BiomeType::OakForest;
 }
 
 // ============================================================================
-// Terrain Height (per-biome shaping)
+// Terrain Height — SMOOTH BIOME BLENDING
 // ============================================================================
+//
+// Best Practice: instead of switching height formulas at a hard boundary,
+// we give each biome a continuous influence weight derived from noise values,
+// then lerp between all biome heights proportionally.
+//
+// Weight functions use smoothstep so influence ramps up/down gradually.
+// Result: mountain peaks naturally taper into forest hills, which gently
+// flatten into plains — no visible seam anywhere.
+// ============================================================================
+
+static float smoothstep(float edge0, float edge1, float x) {
+  float t = std::clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
+  return t * t * (3.0f - 2.0f * t);
+}
 
 float AdvancedTerrainGenerator::GetTerrainHeight(float baseVal, float detailVal,
                                                  float mountainVal,
-                                                 BiomeType biome) const {
+                                                 BiomeType /*unused*/) const {
+  // This overload is kept for the legacy interface but should not be called.
+  // Real blending happens in the overload below.
+  constexpr float BASE_HEIGHT = 64.0f;
+  return BASE_HEIGHT + baseVal * 8.0f + detailVal * 3.0f;
+}
+
+float AdvancedTerrainGenerator::GetTerrainHeightBlended(float baseVal,
+                                                        float detailVal,
+                                                        float mountainVal,
+                                                        float temperature,
+                                                        float humidity) const {
+
   constexpr float BASE_HEIGHT = 64.0f;
 
-  switch (biome) {
-  case BiomeType::Plains:
-    // Very flat: gentle hills ±6, subtle detail ±2
-    return BASE_HEIGHT + baseVal * 6.0f + detailVal * 2.0f;
+  // ── Per-biome height contributions ──────────────────────────────────────
+  float heightPlains = BASE_HEIGHT + baseVal * 5.0f + detailVal * 1.5f;
+  float heightForest = BASE_HEIGHT + baseVal * 10.0f + detailVal * 3.0f;
+  float mountainFactor = std::max(0.0f, mountainVal - 0.2f) / 0.8f;
+  mountainFactor = mountainFactor * mountainFactor;
+  float heightMountain =
+      BASE_HEIGHT + baseVal * 8.0f + detailVal * 2.5f + mountainFactor * 38.0f;
 
-  case BiomeType::OakForest:
-    // Moderate hills: ±10, more detail ±3
-    return BASE_HEIGHT + baseVal * 10.0f + detailVal * 3.0f;
+  // ── Biome weights (continuous, non-exclusive) ────────────────────────────
+  // Mountain weight: rises smoothly above temp=0.2, peaks at temp=0.5
+  float wMountain = smoothstep(0.20f, 0.50f, temperature);
 
-  case BiomeType::Mountain: {
-    // Dramatic: base ±8, plus mountain boost up to +35
-    float mountainFactor = std::max(0.0f, mountainVal - 0.2f) / 0.8f;
-    mountainFactor *= mountainFactor; // Square for sharper peaks
-    return BASE_HEIGHT + baseVal * 8.0f + detailVal * 3.0f +
-           mountainFactor * 35.0f;
-  }
+  // Plains weight: rises when temp is low OR humidity is low
+  float wPlainsTemp = smoothstep(-0.10f, -0.35f, temperature); // low temp
+  float wPlainsHum = smoothstep(-0.15f, -0.40f, humidity);     // low hum
+  float wPlains = std::max(wPlainsTemp, wPlainsHum);
+  wPlains = std::max(0.0f, wPlains - wMountain); // mountains override plains
 
-  default:
-    return BASE_HEIGHT + baseVal * 6.0f;
-  }
+  // Forest weight: what's left over
+  float wForest = std::max(0.0f, 1.0f - wMountain - wPlains);
+
+  // ── Blend ────────────────────────────────────────────────────────────────
+  float totalWeight = wMountain + wPlains + wForest;
+  if (totalWeight < 1e-6f)
+    return heightForest; // fallback
+
+  return (wMountain * heightMountain + wPlains * heightPlains +
+          wForest * heightForest) /
+         totalWeight;
 }
 
 // ============================================================================
@@ -238,8 +263,11 @@ void AdvancedTerrainGenerator::Generate(Chunk &chunk) const {
       float detailVal = detailNoise.GetNoise(worldX, worldZ);
       float mountainVal = mountainNoise.GetNoise(worldX, worldZ);
 
-      // Calculate height based on biome
-      float height = GetTerrainHeight(baseVal, detailVal, mountainVal, biome);
+      // Calculate height with SMOOTH BIOME BLENDING
+      // This is the key fix: instead of picking one biome height formula,
+      // we blend all three biomes smoothly based on noise weights.
+      float height = GetTerrainHeightBlended(baseVal, detailVal, mountainVal,
+                                             temperature, humidity);
       int iHeight = static_cast<int>(height);
 
       columns[x][z] = {iHeight, biome};
@@ -302,7 +330,8 @@ void AdvancedTerrainGenerator::Generate(Chunk &chunk) const {
         float bv = baseNoise.GetNoise(fx, fz);
         float dv = detailNoise.GetNoise(fx, fz);
         float mv = mountainNoise.GetNoise(fx, fz);
-        terrainHeight = static_cast<int>(GetTerrainHeight(bv, dv, mv, biome));
+        terrainHeight =
+            static_cast<int>(GetTerrainHeightBlended(bv, dv, mv, temp, hum));
       }
 
       if (!ShouldPlaceTree(worldX, worldZ, biome))
