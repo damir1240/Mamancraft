@@ -45,15 +45,14 @@ static float smoothstep(float edge0, float edge1, float x) {
 float AdvancedTerrainGenerator::GetTerrainHeight(float baseVal, float detailVal,
                                                  float mountainVal,
                                                  BiomeType /*unused*/) const {
-  // This overload is kept for the legacy interface but should not be called.
-  // Real blending happens in the overload below.
+  // Legacy stub — real work done by GetTerrainHeightBlended.
   constexpr float BASE_HEIGHT = 64.0f;
   return BASE_HEIGHT + baseVal * 8.0f + detailVal * 3.0f;
 }
 
 float AdvancedTerrainGenerator::GetTerrainHeightBlended(float baseVal,
                                                         float detailVal,
-                                                        float mountainVal,
+                                                        float mountainRidgeVal,
                                                         float temperature,
                                                         float humidity) const {
 
@@ -62,28 +61,29 @@ float AdvancedTerrainGenerator::GetTerrainHeightBlended(float baseVal,
   // ── Per-biome height contributions ──────────────────────────────────────
   float heightPlains = BASE_HEIGHT + baseVal * 5.0f + detailVal * 1.5f;
   float heightForest = BASE_HEIGHT + baseVal * 10.0f + detailVal * 3.0f;
-  float mountainFactor = std::max(0.0f, mountainVal - 0.2f) / 0.8f;
-  mountainFactor = mountainFactor * mountainFactor;
-  float heightMountain =
-      BASE_HEIGHT + baseVal * 8.0f + detailVal * 2.5f + mountainFactor * 38.0f;
 
-  // ── Biome weights (continuous, non-exclusive) ────────────────────────────
-  // Mountain weight: rises smoothly above temp=0.2, peaks at temp=0.5
+  // Mountain: Ridged Multifractal noise produces sharp ridge lines.
+  // mountainRidgeVal is in [0,1] (already abs-inverted by FractalType_Ridged):
+  //   values close to 1.0 = ridge peaks, values near 0 = valleys
+  //
+  // We apply a power curve to sharpen peaks further, then scale to height.
+  float ridgePeak = mountainRidgeVal;                  // [0, 1] ridge value
+  ridgePeak = ridgePeak * ridgePeak * ridgePeak;       // sharpen: power 3
+  float heightMountain = BASE_HEIGHT + baseVal * 12.0f // broad base shape
+                         + detailVal * 4.0f            // surface detail
+                         + ridgePeak * 90.0f;          // dramatic ridge peaks
+
+  // ── Biome weights ───────────────────────────────────────────────────────
   float wMountain = smoothstep(0.20f, 0.50f, temperature);
-
-  // Plains weight: rises when temp is low OR humidity is low
-  float wPlainsTemp = smoothstep(-0.10f, -0.35f, temperature); // low temp
-  float wPlainsHum = smoothstep(-0.15f, -0.40f, humidity);     // low hum
+  float wPlainsTemp = smoothstep(-0.10f, -0.35f, temperature);
+  float wPlainsHum = smoothstep(-0.15f, -0.40f, humidity);
   float wPlains = std::max(wPlainsTemp, wPlainsHum);
-  wPlains = std::max(0.0f, wPlains - wMountain); // mountains override plains
-
-  // Forest weight: what's left over
+  wPlains = std::max(0.0f, wPlains - wMountain);
   float wForest = std::max(0.0f, 1.0f - wMountain - wPlains);
 
-  // ── Blend ────────────────────────────────────────────────────────────────
   float totalWeight = wMountain + wPlains + wForest;
   if (totalWeight < 1e-6f)
-    return heightForest; // fallback
+    return heightForest;
 
   return (wMountain * heightMountain + wPlains * heightPlains +
           wForest * heightForest) /
@@ -98,9 +98,18 @@ BlockType AdvancedTerrainGenerator::GetSurfaceBlock(BiomeType biome, int worldY,
                                                     int terrainHeight) const {
   BiomeInfo info = GetBiomeInfo(biome);
 
-  // Mountains: above a certain height, surface becomes stone
-  if (worldY >= info.stoneHeightThreshold) {
-    return BlockType::Stone;
+  // Mountains: stone appears on the UPPER part of mountain terrain.
+  // Instead of a fixed absolute Y, use relative fraction of terrain height.
+  // This ensures stone caps appear only near peaks, not at all altitude.
+  if (biome == BiomeType::Mountain) {
+    constexpr float BASE_HEIGHT = 64.0f;
+    // Stone starts at ~65% above base (so foothills stay grassy)
+    float stoneStart = BASE_HEIGHT + (terrainHeight - BASE_HEIGHT) * 0.65f;
+    // Hard minimum: never stone below Y=85
+    stoneStart = std::max(stoneStart, 85.0f);
+    if (worldY >= static_cast<int>(stoneStart)) {
+      return BlockType::Stone;
+    }
   }
 
   return info.surfaceBlock;
@@ -218,11 +227,28 @@ void AdvancedTerrainGenerator::Generate(Chunk &chunk) const {
   detailNoise.SetFractalOctaves(2);
   detailNoise.SetFrequency(0.02f);
 
-  // Mountain: large-scale mountain regions
+  // Mountain: Ridged Multifractal — creates sharp peaks and ridge lines
+  // Best Practice: FractalType_Ridged inverts the absolute value, giving
+  // spike-like peaks instead of smooth bumps. Combined with domain warping,
+  // this produces natural mountain chains with varied peak heights.
   FastNoiseLite mountainNoise;
   mountainNoise.SetSeed(m_Seed + 200);
   mountainNoise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
-  mountainNoise.SetFrequency(0.003f);
+  mountainNoise.SetFractalType(
+      FastNoiseLite::FractalType_Ridged); // KEY: ridges!
+  mountainNoise.SetFractalOctaves(5); // More octaves = more detail on slopes
+  mountainNoise.SetFractalLacunarity(2.2f);
+  mountainNoise.SetFractalGain(0.5f);
+  mountainNoise.SetFrequency(0.0018f); // Mid-scale: mountain ranges
+
+  // Domain Warp noise: displaces mountain sampling coordinates organically.
+  // This breaks up the regular noise pattern into flowing ridges and chains.
+  FastNoiseLite warpNoise;
+  warpNoise.SetSeed(m_Seed + 500);
+  warpNoise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
+  warpNoise.SetFractalType(FastNoiseLite::FractalType_FBm);
+  warpNoise.SetFractalOctaves(2);
+  warpNoise.SetFrequency(0.0008f); // Warp at large scale = mountain chains
 
   // Biome noise: temperature
   FastNoiseLite temperatureNoise;
@@ -258,10 +284,23 @@ void AdvancedTerrainGenerator::Generate(Chunk &chunk) const {
       float humidity = humidityNoise.GetNoise(worldX, worldZ);
       BiomeType biome = GetBiome(temperature, humidity);
 
-      // Sample terrain noise
+      // Sample base terrain noise
       float baseVal = baseNoise.GetNoise(worldX, worldZ);
       float detailVal = detailNoise.GetNoise(worldX, worldZ);
-      float mountainVal = mountainNoise.GetNoise(worldX, worldZ);
+
+      // Sample mountain noise with DOMAIN WARPING:
+      // warp the x,z coords by a second noise function before sampling
+      // mountain. This creates natural mountain chains and irregular ridge
+      // formations instead of uniform blobs.
+      constexpr float WARP_STRENGTH =
+          80.0f; // How far (in world units) to shift
+      float warpX = warpNoise.GetNoise(worldX, worldZ) * WARP_STRENGTH;
+      float warpZ = warpNoise.GetNoise(worldX + 1234.5f, worldZ + 6789.0f) *
+                    WARP_STRENGTH;
+      float mountainVal =
+          (mountainNoise.GetNoise(worldX + warpX, worldZ + warpZ) + 1.0f) *
+          0.5f;
+      // mountainVal is now in [0, 1]: 1.0 = sharp ridge peak, 0.0 = valley
 
       // Calculate height with SMOOTH BIOME BLENDING
       // This is the key fix: instead of picking one biome height formula,
@@ -329,7 +368,9 @@ void AdvancedTerrainGenerator::Generate(Chunk &chunk) const {
         biome = GetBiome(temp, hum);
         float bv = baseNoise.GetNoise(fx, fz);
         float dv = detailNoise.GetNoise(fx, fz);
-        float mv = mountainNoise.GetNoise(fx, fz);
+        float wxv = warpNoise.GetNoise(fx, fz) * 80.0f;
+        float wzv = warpNoise.GetNoise(fx + 1234.5f, fz + 6789.0f) * 80.0f;
+        float mv = (mountainNoise.GetNoise(fx + wxv, fz + wzv) + 1.0f) * 0.5f;
         terrainHeight =
             static_cast<int>(GetTerrainHeightBlended(bv, dv, mv, temp, hum));
       }
