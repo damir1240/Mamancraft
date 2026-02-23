@@ -20,7 +20,7 @@ private:
 
   static void AddFace(VulkanMesh::Builder &builder, const glm::vec3 &chunkPos,
                       const glm::ivec3 &blockPos, Face face,
-                      const glm::vec3 &color);
+                      const struct BlockInfo &info);
 };
 
 } // namespace mc

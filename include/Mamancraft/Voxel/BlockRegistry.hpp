@@ -2,32 +2,88 @@
 #include "Mamancraft/Voxel/Block.hpp"
 #include <glm/glm.hpp>
 #include <map>
+#include <string>
 
 namespace mc {
 
 struct BlockInfo {
   glm::vec3 color;
   bool isTransparent;
+  std::string textureTop;
+  std::string textureSide;
+  std::string textureBottom;
+
+  // Runtime indices (populated by AssetManager/Renderer)
+  uint32_t texIndexTop = 0;
+  uint32_t texIndexSide = 0;
+  uint32_t texIndexBottom = 0;
 };
 
 class BlockRegistry {
 public:
-  [[nodiscard]] static const BlockInfo &GetInfo(BlockType type) noexcept {
-    static const std::map<BlockType, BlockInfo> registry = {
-        {BlockType::Air, {{0.0f, 0.0f, 0.0f}, true}},
-        {BlockType::Dirt, {{0.45f, 0.29f, 0.17f}, false}},
-        {BlockType::Grass, {{0.27f, 0.52f, 0.19f}, false}},
-        {BlockType::Stone, {{0.58f, 0.61f, 0.62f}, false}},
-        {BlockType::Wood, {{0.33f, 0.23f, 0.13f}, false}},
-        {BlockType::Leaves, {{0.16f, 0.47f, 0.11f}, false}},
-        {BlockType::Bedrock, {{0.21f, 0.21f, 0.21f}, false}}};
+  static BlockRegistry &Instance() {
+    static BlockRegistry instance;
+    return instance;
+  }
 
-    if (auto it = registry.find(type); it != registry.end()) {
+  [[nodiscard]] const BlockInfo &GetInfo(BlockType type) const {
+    if (auto it = m_Registry.find(type); it != m_Registry.end()) {
       return it->second;
     }
-    static const BlockInfo unknown = {{1.0f, 0.0f, 1.0f}, false};
+    static const BlockInfo unknown = {{1.0f, 0.0f, 1.0f},
+                                      false,
+                                      "mc:textures/block/debug.png",
+                                      "mc:textures/block/debug.png",
+                                      "mc:textures/block/debug.png"};
     return unknown;
   }
+
+  [[nodiscard]] std::map<BlockType, BlockInfo> &GetMutableRegistry() {
+    return m_Registry;
+  }
+
+private:
+  BlockRegistry() {
+    m_Registry = {{BlockType::Air, {{0.0f, 0.0f, 0.0f}, true, "", "", ""}},
+                  {BlockType::Dirt,
+                   {{1.0f, 1.0f, 1.0f},
+                    false,
+                    "mc:textures/block/dirt.png",
+                    "mc:textures/block/dirt.png",
+                    "mc:textures/block/dirt.png"}},
+                  {BlockType::Grass,
+                   {{1.0f, 1.0f, 1.0f},
+                    false,
+                    "mc:textures/block/grass_top.png",
+                    "mc:textures/block/grass_side.png",
+                    "mc:textures/block/dirt.png"}},
+                  {BlockType::Stone,
+                   {{1.0f, 1.0f, 1.0f},
+                    false,
+                    "mc:textures/block/stone.png",
+                    "mc:textures/block/stone.png",
+                    "mc:textures/block/stone.png"}},
+                  {BlockType::Wood,
+                   {{1.0f, 1.0f, 1.0f},
+                    false,
+                    "mc:textures/block/oak_log_top.png",
+                    "mc:textures/block/oak_log.png",
+                    "mc:textures/block/oak_log_top.png"}},
+                  {BlockType::Leaves,
+                   {{1.0f, 1.0f, 1.0f},
+                    false,
+                    "mc:textures/block/oak_leaves.png",
+                    "mc:textures/block/oak_leaves.png",
+                    "mc:textures/block/oak_leaves.png"}},
+                  {BlockType::Bedrock,
+                   {{1.0f, 1.0f, 1.0f},
+                    false,
+                    "mc:textures/block/bedrock.png",
+                    "mc:textures/block/bedrock.png",
+                    "mc:textures/block/bedrock.png"}}};
+  }
+
+  std::map<BlockType, BlockInfo> m_Registry;
 };
 
 } // namespace mc

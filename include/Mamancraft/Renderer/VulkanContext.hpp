@@ -33,6 +33,10 @@ public:
     return m_CommandPool;
   }
 
+  vk::PhysicalDeviceProperties GetPhysicalDeviceProperties() const {
+    return m_PhysicalDevice.getProperties();
+  }
+
   void ImmediateSubmit(std::function<void(vk::CommandBuffer)> &&func);
 
 private:
@@ -65,6 +69,9 @@ private:
   std::unique_ptr<VulkanSwapchain> m_Swapchain;
   std::unique_ptr<VulkanAllocator> m_Allocator;
   std::unique_ptr<VulkanCommandPool> m_CommandPool;
+
+  vk::PhysicalDeviceVulkan12Features m_Features12;
+  vk::PhysicalDeviceVulkan13Features m_Features13;
 
   vk::Fence m_ImmediateFence = nullptr;
 

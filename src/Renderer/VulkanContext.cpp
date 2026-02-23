@@ -359,11 +359,17 @@ void VulkanContext::CreateLogicalDevice() {
   }
 
   vk::PhysicalDeviceFeatures deviceFeatures;
+  deviceFeatures.samplerAnisotropy = true;
 
-  // Modern dynamic rendering features require Vulkan 1.3 or KHR extensions
-  // We are on Vulkan 1.4, so Dynamic Rendering is core in Vulkan 1.3 features
-  vk::PhysicalDeviceVulkan13Features features13;
-  features13.dynamicRendering = true;
+  m_Features12.descriptorIndexing = true;
+  m_Features12.descriptorBindingPartiallyBound = true;
+  m_Features12.descriptorBindingSampledImageUpdateAfterBind = true;
+  m_Features12.runtimeDescriptorArray = true;
+  m_Features12.shaderSampledImageArrayNonUniformIndexing = true;
+  m_Features12.bufferDeviceAddress = true; // Best practice 2026
+
+  m_Features13.dynamicRendering = true;
+  m_Features13.synchronization2 = true;
 
   vk::DeviceCreateInfo createInfo;
   createInfo.queueCreateInfoCount =
@@ -372,8 +378,9 @@ void VulkanContext::CreateLogicalDevice() {
 
   createInfo.pEnabledFeatures = &deviceFeatures;
 
-  // Chain features
-  createInfo.pNext = &features13;
+  // Chain features: createInfo.pNext -> Features13 -> Features12
+  m_Features13.pNext = &m_Features12;
+  createInfo.pNext = &m_Features13;
 
   createInfo.enabledExtensionCount =
       static_cast<uint32_t>(m_DeviceExtensions.size());

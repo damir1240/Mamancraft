@@ -37,15 +37,16 @@ if(NOT GLSLC_EXECUTABLE)
     message(FATAL_ERROR "glslc not found! Please check VULKAN_SDK installation.")
 endif()
 
-file(GLOB_RECURSE SHADERS "assets/shaders/*.vert" "assets/shaders/*.frag")
+file(GLOB_RECURSE SHADERS "assets/base/assets/mc/shaders/*.vert" "assets/base/assets/mc/shaders/*.frag")
 set(SPV_FILES "")
 
 foreach(SHADER ${SHADERS})
     get_filename_component(FILE_NAME ${SHADER} NAME)
-    set(SPV_FILE "${CMAKE_BINARY_DIR}/assets/shaders/${FILE_NAME}.spv")
+    # Output to the same structure in the build dir so copy_directory works perfectly
+    set(SPV_FILE "${CMAKE_BINARY_DIR}/assets/base/assets/mc/shaders/${FILE_NAME}.spv")
     add_custom_command(
         OUTPUT ${SPV_FILE}
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/assets/shaders"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/assets/base/assets/mc/shaders"
         COMMAND ${GLSLC_EXECUTABLE} ${SHADER} -o ${SPV_FILE}
         DEPENDS ${SHADER}
         COMMENT "Compiling shader ${FILE_NAME} to vulkan SPIR-V"
@@ -53,12 +54,14 @@ foreach(SHADER ${SHADERS})
     list(APPEND SPV_FILES ${SPV_FILE})
 endforeach()
 
+
 add_custom_target(MamancraftShaders ALL DEPENDS ${SPV_FILES})
 # --------------------------
 
 add_library(MamancraftEngine STATIC ${MAMANCRAFT_ENGINE_SRCS})
 target_include_directories(MamancraftEngine PUBLIC include)
-target_include_directories(MamancraftEngine PRIVATE external) # Для доступа к коренным папкам зависимостей если нужно
+target_include_directories(MamancraftEngine PRIVATE external)
+target_include_directories(MamancraftEngine PRIVATE external/stb)
 
 target_compile_definitions(MamancraftEngine PUBLIC 
     VULKAN_HPP_NO_SETTERS
@@ -76,15 +79,20 @@ add_executable(Mamancraft src/main.cpp)
 add_dependencies(Mamancraft MamancraftShaders)
 target_link_libraries(Mamancraft PRIVATE MamancraftEngine)
 
-# Copy assets to executable directory for portable structure
+# Copy source assets and compiled shaders
 add_custom_command(TARGET Mamancraft POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_BINARY_DIR}/assets"
+        "${CMAKE_SOURCE_DIR}/assets"
         "$<TARGET_FILE_DIR:Mamancraft>/assets"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_BINARY_DIR}/assets/base"
+        "$<TARGET_FILE_DIR:Mamancraft>/assets/base"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "$<TARGET_FILE:SDL3::SDL3-shared>"
         "$<TARGET_FILE_DIR:Mamancraft>"
 )
+
+
 
 # GoogleTest
 include(FetchContent)

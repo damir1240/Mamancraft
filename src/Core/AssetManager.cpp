@@ -3,89 +3,94 @@
 #include "Mamancraft/Core/Logger.hpp"
 #include "Mamancraft/Renderer/VulkanContext.hpp"
 
-
 #include <SDL3/SDL.h>
 
 namespace mc {
 
 AssetManager::AssetManager(VulkanContext &context) : m_Context(context) {
-  m_BaseDir = FileSystem::GetAssetsDir();
-  MC_INFO("Modern AssetManager initialized. Assets directory: {}",
-          m_BaseDir.string());
+  m_PackManager =
+      std::make_unique<ResourcePackManager>(FileSystem::GetAssetsDir());
+  MC_INFO("Modern AssetManager initialized with ResourcePackManager");
 }
 
 AssetManager::~AssetManager() {
   MC_DEBUG("AssetManager destructor: Checking if cleanup needed");
-  // Clear() may have been called explicitly before destruction
-  // Only clear if there are still resources
-  if (!m_ShaderCache.empty() || !m_MeshCache.empty()) {
-    MC_WARN("AssetManager destructor: Resources still exist! Calling Clear()");
-    Clear();
-  } else {
-    MC_DEBUG("AssetManager destructor: Already cleaned up, skipping");
-  }
+  Clear();
 }
 
 void AssetManager::Clear() {
-  if (!m_ShaderCache.empty() || !m_MeshCache.empty()) {
-    MC_INFO("AssetManager::Clear() - Starting cleanup");
-    MC_DEBUG("AssetManager: Clearing {} meshes and {} shaders", 
-             m_MeshCache.size(), m_ShaderCache.size());
-    
-    // CRITICAL: Clear meshes FIRST (they contain VulkanBuffers that use VMA)
-    // This must happen BEFORE VulkanContext destroys the VMA allocator
-    if (!m_MeshCache.empty()) {
-      MC_DEBUG("AssetManager: Clearing mesh cache...");
-      m_MeshCache.clear();
-    }
-    
-    if (!m_ShaderCache.empty()) {
-      MC_DEBUG("AssetManager: Clearing shader cache...");
-      m_ShaderCache.clear();
-    }
-    
-    if (!m_NameToHandle.empty()) {
-      MC_DEBUG("AssetManager: Clearing name-to-handle map...");
-      m_NameToHandle.clear();
-    }
-    
-    MC_INFO("AssetManager::Clear() - Cleanup completed");
-  } else {
-    MC_DEBUG("AssetManager::Clear() - No assets to clear (already cleaned)");
-  }
+  MC_INFO("AssetManager::Clear() - Starting cleanup");
+
+  // Order matters: textures and meshes use Vulkan resources
+  m_MeshCache.clear();
+  m_TextureCache.clear();
+  m_ShaderCache.clear();
+  m_NameToHandle.clear();
+
+  MC_INFO("AssetManager::Clear() - Cleanup completed");
 }
 
 AssetHandle AssetManager::GenerateHandle(std::string_view name) {
   return std::hash<std::string_view>{}(name);
 }
 
-AssetHandle AssetManager::LoadShader(std::string_view name) {
-  std::string sName(name);
-  if (m_NameToHandle.contains(sName)) {
-    return m_NameToHandle[sName];
+AssetHandle AssetManager::LoadShader(std::string_view namespacedPath) {
+  std::string sPath(namespacedPath);
+  if (m_NameToHandle.contains(sPath)) {
+    return m_NameToHandle[sPath];
   }
 
-  AssetHandle handle = GenerateHandle(name);
-  std::filesystem::path fullPath = m_BaseDir / name;
+  auto resolved = m_PackManager->ResolvePath(namespacedPath);
+  if (!resolved) {
+    MC_ERROR("Failed to resolve shader path: {0}", namespacedPath);
+    return INVALID_HANDLE;
+  }
 
+  AssetHandle handle = GenerateHandle(namespacedPath);
   try {
     auto shader = std::make_shared<VulkanShader>(m_Context.GetDevice(),
-                                                 fullPath.string());
+                                                 resolved->string());
     m_ShaderCache[handle] = shader;
-    m_NameToHandle[sName] = handle;
+    m_NameToHandle[sPath] = handle;
     return handle;
   } catch (const std::exception &e) {
-    MC_ERROR("Failed to load shader {}: {}", name, e.what());
+    MC_ERROR("Failed to load shader {0}: {1}", namespacedPath, e.what());
     return INVALID_HANDLE;
   }
 }
 
 std::shared_ptr<VulkanShader> AssetManager::GetShader(AssetHandle handle) {
   auto it = m_ShaderCache.find(handle);
-  if (it != m_ShaderCache.end()) {
-    return it->second;
+  return (it != m_ShaderCache.end()) ? it->second : nullptr;
+}
+
+AssetHandle AssetManager::LoadTexture(std::string_view namespacedPath) {
+  std::string sPath(namespacedPath);
+  if (m_NameToHandle.contains(sPath)) {
+    return m_NameToHandle[sPath];
   }
-  return nullptr;
+
+  auto resolved = m_PackManager->ResolvePath(namespacedPath);
+  if (!resolved) {
+    MC_ERROR("Failed to resolve texture path: {0}", namespacedPath);
+    return INVALID_HANDLE;
+  }
+
+  AssetHandle handle = GenerateHandle(namespacedPath);
+  try {
+    auto texture = std::make_shared<VulkanTexture>(m_Context, *resolved);
+    m_TextureCache[handle] = texture;
+    m_NameToHandle[sPath] = handle;
+    return handle;
+  } catch (const std::exception &e) {
+    MC_ERROR("Failed to load texture {0}: {1}", namespacedPath, e.what());
+    return INVALID_HANDLE;
+  }
+}
+
+std::shared_ptr<VulkanTexture> AssetManager::GetTexture(AssetHandle handle) {
+  auto it = m_TextureCache.find(handle);
+  return (it != m_TextureCache.end()) ? it->second : nullptr;
 }
 
 AssetHandle AssetManager::CreateMesh(std::string_view name,
@@ -102,10 +107,7 @@ AssetHandle AssetManager::CreateMesh(std::string_view name,
 
 std::shared_ptr<VulkanMesh> AssetManager::GetMesh(AssetHandle handle) {
   auto it = m_MeshCache.find(handle);
-  if (it != m_MeshCache.end()) {
-    return it->second;
-  }
-  return nullptr;
+  return (it != m_MeshCache.end()) ? it->second : nullptr;
 }
 
 } // namespace mc

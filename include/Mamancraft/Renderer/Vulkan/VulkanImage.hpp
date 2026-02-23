@@ -4,7 +4,6 @@
 #include "Mamancraft/Renderer/Vulkan/VulkanCore.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanDevice.hpp"
 
-
 namespace mc {
 
 class VulkanImage {
@@ -21,6 +20,9 @@ public:
   vk::Image GetImage() const { return m_Image; }
   vk::ImageView GetImageView() const { return m_ImageView; }
   vk::Format GetFormat() const { return m_Format; }
+
+  void TransitionLayout(vk::CommandBuffer cmd, vk::ImageLayout oldLayout,
+                        vk::ImageLayout newLayout);
 
 private:
   const std::unique_ptr<VulkanAllocator> &m_Allocator;

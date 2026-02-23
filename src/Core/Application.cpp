@@ -72,6 +72,37 @@ void Application::Init() {
     throw std::runtime_error("Required shaders failed to load");
   }
 
+  // --- Initialize Block Registry Textures ---
+  MC_INFO("Loading block textures...");
+  auto &registry = BlockRegistry::Instance();
+  std::unordered_map<std::string, uint32_t> textureToIndex;
+
+  for (auto &[type, info] : registry.GetMutableRegistry()) {
+    if (type == BlockType::Air)
+      continue;
+
+    auto registerTex = [&](const std::string &path, uint32_t &outIndex) {
+      if (path.empty())
+        return;
+      if (textureToIndex.contains(path)) {
+        outIndex = textureToIndex[path];
+        return;
+      }
+      auto handle = m_AssetManager->LoadTexture(path);
+      auto tex = m_AssetManager->GetTexture(handle);
+      if (tex) {
+        outIndex = m_Renderer->RegisterTexture(*tex);
+        textureToIndex[path] = outIndex;
+      } else {
+        MC_ERROR("Failed to load block texture: {0}", path);
+      }
+    };
+
+    registerTex(info.textureTop, info.texIndexTop);
+    registerTex(info.textureSide, info.texIndexSide);
+    registerTex(info.textureBottom, info.texIndexBottom);
+  }
+
   PipelineConfigInfo pipelineConfig;
   VulkanPipeline::DefaultPipelineConfigInfo(pipelineConfig);
   pipelineConfig.colorAttachmentFormat =
@@ -80,7 +111,8 @@ void Application::Init() {
       m_VulkanContext->GetSwapchain()->GetDepthFormat();
 
   pipelineConfig.descriptorSetLayouts = {
-      m_Renderer->GetGlobalDescriptorSetLayout()};
+      m_Renderer->GetGlobalDescriptorSetLayout(),
+      m_Renderer->GetBindlessDescriptorSetLayout()};
 
   vk::PushConstantRange pushConstantRange{};
   pushConstantRange.stageFlags = vk::ShaderStageFlagBits::eVertex;

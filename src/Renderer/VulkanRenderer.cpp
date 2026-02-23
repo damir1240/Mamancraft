@@ -2,6 +2,7 @@
 #include "Mamancraft/Core/Logger.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanCommandPool.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanMesh.hpp"
+#include "Mamancraft/Renderer/Vulkan/VulkanTexture.hpp"
 
 #include <stdexcept>
 
@@ -29,6 +30,9 @@ VulkanRenderer::~VulkanRenderer() {
   }
   if (m_GlobalDescriptorSetLayout) {
     device.destroyDescriptorSetLayout(m_GlobalDescriptorSetLayout);
+  }
+  if (m_BindlessDescriptorSetLayout) {
+    device.destroyDescriptorSetLayout(m_BindlessDescriptorSetLayout);
   }
 
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
@@ -89,31 +93,77 @@ void VulkanRenderer::CreateSyncObjects() {
 }
 
 void VulkanRenderer::CreateDescriptors() {
+  vk::Device device = m_Context.GetDevice()->GetLogicalDevice();
+
+  // --- Set 0: Global UBO ---
   vk::DescriptorSetLayoutBinding uboLayoutBinding{};
   uboLayoutBinding.binding = 0;
   uboLayoutBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
   uboLayoutBinding.descriptorCount = 1;
-  uboLayoutBinding.stageFlags = vk::ShaderStageFlagBits::eVertex;
+  uboLayoutBinding.stageFlags =
+      vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
 
-  vk::DescriptorSetLayoutCreateInfo layoutInfo{};
-  layoutInfo.bindingCount = 1;
-  layoutInfo.pBindings = &uboLayoutBinding;
+  vk::DescriptorSetLayoutCreateInfo globalLayoutInfo{};
+  globalLayoutInfo.bindingCount = 1;
+  globalLayoutInfo.pBindings = &uboLayoutBinding;
 
   m_GlobalDescriptorSetLayout =
-      m_Context.GetDevice()->GetLogicalDevice().createDescriptorSetLayout(
-          layoutInfo);
+      device.createDescriptorSetLayout(globalLayoutInfo);
 
+  // --- Set 1: Bindless Textures ---
+  vk::DescriptorSetLayoutBinding bindlessBinding{};
+  bindlessBinding.binding = 0;
+  bindlessBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+  bindlessBinding.descriptorCount = MAX_BINDLESS_RESOURCES;
+  bindlessBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+
+  vk::DescriptorBindingFlags bindingFlags =
+      vk::DescriptorBindingFlagBits::ePartiallyBound |
+      vk::DescriptorBindingFlagBits::eUpdateAfterBind;
+
+  vk::DescriptorSetLayoutBindingFlagsCreateInfo layoutBindingFlags{};
+  layoutBindingFlags.bindingCount = 1;
+  layoutBindingFlags.pBindingFlags = &bindingFlags;
+
+  vk::DescriptorSetLayoutCreateInfo bindlessLayoutInfo{};
+  bindlessLayoutInfo.bindingCount = 1;
+  bindlessLayoutInfo.pBindings = &bindlessBinding;
+  bindlessLayoutInfo.flags =
+      vk::DescriptorSetLayoutCreateFlagBits::eUpdateAfterBindPool;
+  bindlessLayoutInfo.pNext = &layoutBindingFlags;
+
+  m_BindlessDescriptorSetLayout =
+      device.createDescriptorSetLayout(bindlessLayoutInfo);
+
+  // --- Descriptor Pool ---
   std::vector<vk::DescriptorPoolSize> poolSizes = {
       {vk::DescriptorType::eUniformBuffer,
-       static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT)}};
+       static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT)},
+      {vk::DescriptorType::eCombinedImageSampler, MAX_BINDLESS_RESOURCES}};
 
   vk::DescriptorPoolCreateInfo poolInfo{};
+  poolInfo.flags = vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind;
   poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
   poolInfo.pPoolSizes = poolSizes.data();
-  poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+  poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT + 1);
 
-  m_DescriptorPool =
-      m_Context.GetDevice()->GetLogicalDevice().createDescriptorPool(poolInfo);
+  m_DescriptorPool = device.createDescriptorPool(poolInfo);
+
+  // --- Allocate Bindless Set ---
+  // For variable descriptor count, we use pNext chain in allocation
+  uint32_t variableDescriptorCount = MAX_BINDLESS_RESOURCES;
+  vk::DescriptorSetVariableDescriptorCountAllocateInfo
+      variableDescriptorCountAllocInfo{};
+  variableDescriptorCountAllocInfo.descriptorSetCount = 1;
+  variableDescriptorCountAllocInfo.pDescriptorCounts = &variableDescriptorCount;
+
+  vk::DescriptorSetAllocateInfo bindlessAllocInfo{};
+  bindlessAllocInfo.descriptorPool = m_DescriptorPool;
+  bindlessAllocInfo.descriptorSetCount = 1;
+  bindlessAllocInfo.pSetLayouts = &m_BindlessDescriptorSetLayout;
+  bindlessAllocInfo.pNext = &variableDescriptorCountAllocInfo;
+
+  m_BindlessDescriptorSet = device.allocateDescriptorSets(bindlessAllocInfo)[0];
 }
 
 void VulkanRenderer::CreateUboBuffers() {
@@ -160,6 +210,29 @@ void VulkanRenderer::CreateUboBuffers() {
     m_Context.GetDevice()->GetLogicalDevice().updateDescriptorSets(
         1, &descriptorWrite, 0, nullptr);
   }
+}
+
+uint32_t VulkanRenderer::RegisterTexture(const VulkanTexture &texture) {
+  static uint32_t nextIndex = 0;
+  if (nextIndex >= MAX_BINDLESS_RESOURCES) {
+    throw std::runtime_error("Maximum bindless textures reached!");
+  }
+
+  uint32_t index = nextIndex++;
+  vk::DescriptorImageInfo imageInfo = texture.GetDescriptorInfo();
+
+  vk::WriteDescriptorSet descriptorWrite{};
+  descriptorWrite.dstSet = m_BindlessDescriptorSet;
+  descriptorWrite.dstBinding = 0;
+  descriptorWrite.dstArrayElement = index;
+  descriptorWrite.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+  descriptorWrite.descriptorCount = 1;
+  descriptorWrite.pImageInfo = &imageInfo;
+
+  m_Context.GetDevice()->GetLogicalDevice().updateDescriptorSets(
+      1, &descriptorWrite, 0, nullptr);
+
+  return index;
 }
 
 void VulkanRenderer::UpdateGlobalUbo(const GlobalUbo &ubo) {
@@ -397,6 +470,10 @@ void VulkanRenderer::DrawMesh(vk::CommandBuffer commandBuffer,
   commandBuffer.bindDescriptorSets(
       vk::PipelineBindPoint::eGraphics, pipeline.GetPipelineLayout(), 0, 1,
       &m_GlobalDescriptorSets[m_CurrentFrameIndex], 0, nullptr);
+
+  commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                   pipeline.GetPipelineLayout(), 1, 1,
+                                   &m_BindlessDescriptorSet, 0, nullptr);
 
   commandBuffer.pushConstants(pipeline.GetPipelineLayout(),
                               vk::ShaderStageFlagBits::eVertex, 0,

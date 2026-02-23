@@ -6,24 +6,14 @@
 #include <string>
 #include <unordered_map>
 
-
+#include "Mamancraft/Core/ResourcePackManager.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanMesh.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanShader.hpp"
-
+#include "Mamancraft/Renderer/Vulkan/VulkanTexture.hpp"
 
 namespace mc {
 
 class VulkanContext;
-
-/**
- * @brief Handle-based Asset Manager for modern Vulkan engines.
- *
- * Best Practices:
- * - Opaque handles (uint64_t) instead of smart pointers.
- * - Resource lifetime is managed internally.
- * - Centralized registry.
- * - C++20 features (std::span, std::string_view).
- */
 
 using AssetHandle = uint64_t;
 constexpr AssetHandle INVALID_HANDLE = 0;
@@ -36,19 +26,22 @@ public:
   AssetManager(const AssetManager &) = delete;
   AssetManager &operator=(const AssetManager &) = delete;
 
+  // --- Resource Pack Management ---
+  ResourcePackManager &GetPackManager() { return *m_PackManager; }
+
   // --- Shaders ---
-  AssetHandle LoadShader(std::string_view name);
+  AssetHandle LoadShader(std::string_view namespacedPath);
   std::shared_ptr<VulkanShader> GetShader(AssetHandle handle);
+
+  // --- Textures ---
+  AssetHandle LoadTexture(std::string_view namespacedPath);
+  std::shared_ptr<VulkanTexture> GetTexture(AssetHandle handle);
 
   // --- Meshes ---
   AssetHandle CreateMesh(std::string_view name,
                          const VulkanMesh::Builder &builder);
   std::shared_ptr<VulkanMesh> GetMesh(AssetHandle handle);
 
-  /**
-   * @brief Forces destruction of all cached resources.
-   * Must be called BEFORE destroying VulkanContext.
-   */
   void Clear();
 
 private:
@@ -56,9 +49,11 @@ private:
 
 private:
   VulkanContext &m_Context;
-  std::filesystem::path m_BaseDir;
+  std::unique_ptr<ResourcePackManager> m_PackManager;
 
   std::unordered_map<AssetHandle, std::shared_ptr<VulkanShader>> m_ShaderCache;
+  std::unordered_map<AssetHandle, std::shared_ptr<VulkanTexture>>
+      m_TextureCache;
   std::unordered_map<AssetHandle, std::shared_ptr<VulkanMesh>> m_MeshCache;
   std::unordered_map<std::string, AssetHandle> m_NameToHandle;
 };
