@@ -1,0 +1,58 @@
+Версия MSBuild 18.3.0-release-26070-10+3972042b7 для .NET Framework
+
+  Checking File Globs
+  SDL_uclibc.vcxproj -> D:\Dev\Projects\Mamancraft\build\external\SDL\Debug\SDL_uclibc.lib
+  SDL3-shared.vcxproj -> D:\Dev\Projects\Mamancraft\build\external\SDL\Debug\SDL3.dll
+  spdlog.vcxproj -> D:\Dev\Projects\Mamancraft\build\external\spdlog\Debug\spdlogd.lib
+  Application.cpp
+  AssetManager.cpp
+  InputManager.cpp
+  Logger.cpp
+  ResourcePackManager.cpp
+  Camera.cpp
+  VMA.cpp
+  VulkanAllocator.cpp
+  VulkanBuffer.cpp
+  VulkanCommandPool.cpp
+  VulkanDevice.cpp
+  VulkanImage.cpp
+  VulkanMesh.cpp
+  VulkanPipeline.cpp
+  VulkanShader.cpp
+  VulkanSwapchain.cpp
+  VulkanTexture.cpp
+  stb_image_impl.cpp
+  VulkanContext.cpp
+  VulkanRenderer.cpp
+  Создание кода...
+  Компиляция...
+  TerrainGenerator.cpp
+  VoxelMesher.cpp
+  World.cpp
+  Создание кода...
+  MamancraftEngine.vcxproj -> D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.lib
+  main.cpp
+MamancraftEngine.lib(Application.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(Application.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+MamancraftEngine.lib(Logger.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(Logger.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+MamancraftEngine.lib(VulkanContext.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(VulkanContext.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+MamancraftEngine.lib(AssetManager.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(AssetManager.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+MamancraftEngine.lib(InputManager.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(InputManager.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+MamancraftEngine.lib(Camera.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(Camera.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+MamancraftEngine.lib(VulkanPipeline.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(VulkanPipeline.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+MamancraftEngine.lib(VulkanRenderer.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(VulkanRenderer.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+MamancraftEngine.lib(TerrainGenerator.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(TerrainGenerator.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+MamancraftEngine.lib(World.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(World.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+MamancraftEngine.lib(VoxelMesher.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(VoxelMesher.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+MamancraftEngine.lib(VulkanDevice.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(VulkanDevice.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+MamancraftEngine.lib(VulkanAllocator.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(VulkanAllocator.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+MamancraftEngine.lib(VulkanCommandPool.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(VulkanCommandPool.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+MamancraftEngine.lib(VulkanSwapchain.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(VulkanSwapchain.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+MamancraftEngine.lib(ResourcePackManager.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(ResourcePackManager.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+MamancraftEngine.lib(VulkanMesh.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(VulkanMesh.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+MamancraftEngine.lib(VulkanShader.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(VulkanShader.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+MamancraftEngine.lib(VulkanTexture.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(VulkanTexture.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+MamancraftEngine.lib(VulkanBuffer.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(VulkanBuffer.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+MamancraftEngine.lib(VMA.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(VMA.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+MamancraftEngine.lib(VulkanImage.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(VulkanImage.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+MamancraftEngine.lib(stb_image_impl.obj) : warning LNK4099: "MamancraftEngine.pdb" PDB не найден с "MamancraftEngine.lib(stb_image_impl.obj)" или на "D:\Dev\Projects\Mamancraft\build\Debug\MamancraftEngine.pdb"; компоновка объекта выполняется как при отсутствии отладочных данных [D:\Dev\Projects\Mamancraft\build\Mamancraft.vcxproj]
+  Mamancraft.vcxproj -> D:\Dev\Projects\Mamancraft\build\Debug\Mamancraft.exe

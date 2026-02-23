@@ -7,6 +7,7 @@
 #include "Mamancraft/Renderer/Vulkan/VulkanPipeline.hpp"
 #include "Mamancraft/Renderer/VulkanContext.hpp"
 #include "Mamancraft/Renderer/VulkanRenderer.hpp"
+#include "Mamancraft/Voxel/World.hpp"
 
 #include <SDL3/SDL.h>
 #include <memory>
@@ -47,6 +48,7 @@ private:
 
   // Rendering
   std::unique_ptr<VulkanPipeline> m_Pipeline;
+  std::unique_ptr<World> m_World;
   AssetHandle m_ChunkMesh;
 
   Camera m_Camera;

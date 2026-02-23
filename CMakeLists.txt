@@ -65,7 +65,9 @@ target_include_directories(MamancraftEngine PRIVATE external/stb)
 
 target_compile_definitions(MamancraftEngine PUBLIC 
     VULKAN_HPP_NO_SETTERS
+    GLM_ENABLE_EXPERIMENTAL
 )
+
 
 target_link_libraries(MamancraftEngine PUBLIC 
     Vulkan::Vulkan 

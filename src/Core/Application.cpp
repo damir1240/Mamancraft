@@ -5,6 +5,7 @@
 #include "Mamancraft/Renderer/VulkanContext.hpp"
 #include "Mamancraft/Voxel/BlockRegistry.hpp"
 #include "Mamancraft/Voxel/Chunk.hpp"
+#include "Mamancraft/Voxel/TerrainGenerator.hpp"
 #include "Mamancraft/Voxel/VoxelMesher.hpp"
 
 #include <SDL3/SDL_assert.h>
@@ -123,26 +124,13 @@ void Application::Init() {
   m_Pipeline = std::make_unique<VulkanPipeline>(
       m_VulkanContext->GetDevice(), *vertShader, *fragShader, pipelineConfig);
 
+  m_World = std::make_unique<World>(std::make_unique<WaveTerrainGenerator>());
+
   // --- Create Chunk ---
-  Chunk chunk({0, 0, 0});
-  for (int x = 0; x < Chunk::SIZE; x++) {
-    for (int z = 0; z < Chunk::SIZE; z++) {
-      // Create a wavy terrain for testing
-      int height =
-          static_cast<int>(5.0f + 3.0f * sin(x * 0.2f) * cos(z * 0.2f));
-      for (int y = 0; y < height; y++) {
-        BlockType type = BlockType::Stone;
-        if (y == height - 1)
-          type = BlockType::Grass;
-        else if (y > height - 4)
-          type = BlockType::Dirt;
+  auto chunk = m_World->GetChunk({0, 0, 0});
 
-        chunk.SetBlock(x, y, z, {type});
-      }
-    }
-  }
+  VulkanMesh::Builder chunkMesh = VoxelMesher::GenerateMesh(*chunk);
 
-  VulkanMesh::Builder chunkMesh = VoxelMesher::GenerateMesh(chunk);
   m_ChunkMesh = m_AssetManager->CreateMesh("chunk_0_0_0", chunkMesh);
 
   m_Camera.SetPosition(
