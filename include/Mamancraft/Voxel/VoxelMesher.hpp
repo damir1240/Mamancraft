@@ -18,9 +18,21 @@ private:
     Left     // -X
   };
 
-  static void AddFace(VulkanMesh::Builder &builder, const glm::vec3 &chunkPos,
-                      const glm::ivec3 &blockPos, Face face,
-                      const struct BlockInfo &info);
+  struct FaceData {
+    uint32_t texIndex;
+    glm::vec3 color;
+    bool active = false;
+
+    bool operator==(const FaceData &other) const {
+      return active == other.active && texIndex == other.texIndex &&
+             color == other.color;
+    }
+  };
+
+  static void AddGreedyFace(VulkanMesh::Builder &builder,
+                            const glm::vec3 &chunkOffset, const glm::ivec3 &p,
+                            int axis, int axis1, int axis2, int direction,
+                            int width, int height, const FaceData &data);
 };
 
 } // namespace mc

@@ -1,15 +1,14 @@
 #include "Mamancraft/Core/Application.hpp"
 #include "Mamancraft/Core/FileSystem.hpp"
 #include "Mamancraft/Core/Logger.hpp"
-#include "Mamancraft/Renderer/Vulkan/VulkanShader.hpp"
 #include "Mamancraft/Renderer/VulkanContext.hpp"
 #include "Mamancraft/Voxel/BlockRegistry.hpp"
 #include "Mamancraft/Voxel/Chunk.hpp"
 #include "Mamancraft/Voxel/TerrainGenerator.hpp"
-#include "Mamancraft/Voxel/VoxelMesher.hpp"
 
 #include <SDL3/SDL_assert.h>
 #include <chrono>
+#include <spdlog/fmt/fmt.h>
 #include <stdexcept>
 
 namespace mc {
@@ -124,23 +123,23 @@ void Application::Init() {
   m_Pipeline = std::make_unique<VulkanPipeline>(
       m_VulkanContext->GetDevice(), *vertShader, *fragShader, pipelineConfig);
 
-  m_World = std::make_unique<World>(std::make_unique<WaveTerrainGenerator>());
+  m_TaskSystem = std::make_unique<TaskSystem>();
+  m_World = std::make_unique<World>(std::make_unique<WaveTerrainGenerator>(),
+                                    *m_TaskSystem);
 
-  // --- Create Chunk ---
-  auto chunk = m_World->GetChunk({0, 0, 0});
-
-  VulkanMesh::Builder chunkMesh = VoxelMesher::GenerateMesh(*chunk);
-
-  m_ChunkMesh = m_AssetManager->CreateMesh("chunk_0_0_0", chunkMesh);
-
+  // --- Initial World Load ---
+  // Position camera first so World::Update knows what to load
   m_Camera.SetPosition(
       {Chunk::SIZE / 2.0f, Chunk::SIZE / 2.0f + 10.0f, Chunk::SIZE * 1.5f});
   m_Camera.SetPerspective(glm::radians(45.0f),
                           (float)m_Config.width / (float)m_Config.height, 0.1f,
                           1000.0f);
 
+  m_World->Update(m_Camera.GetPosition());
+
   m_IsRunning = true;
-  MC_INFO("Application initialized successfully.");
+  MC_INFO("Application initialized successfully with TaskSystem: {0} threads",
+          m_TaskSystem->GetThreadCount());
 }
 
 void Application::Shutdown() {
@@ -158,6 +157,10 @@ void Application::Shutdown() {
     m_VulkanContext.reset();
   if (m_InputManager)
     m_InputManager.reset();
+  if (m_World)
+    m_World.reset();
+  if (m_TaskSystem)
+    m_TaskSystem.reset();
   if (m_Window) {
     SDL_DestroyWindow(m_Window);
     m_Window = nullptr;
@@ -230,6 +233,27 @@ void Application::Update(float dt) {
   m_Camera.SetPosition(pos);
   m_Camera.SetRotation(rot);
   m_Camera.Update();
+
+  // World Update
+  m_World->Update(pos);
+
+  // Process newly generated meshes (GPU Upload)
+  auto pendingMeshes = m_World->GetPendingMeshes();
+  for (auto &[coords, builder] : pendingMeshes) {
+    std::string meshName =
+        fmt::format("chunk_{}_{}_{}", coords.x, coords.y, coords.z);
+
+    // Create or Update mesh
+    if (m_ChunkMeshes.contains(coords)) {
+      // Skip for now
+    } else {
+      if (builder.vertices.empty()) {
+        m_ChunkMeshes[coords] = 0; // Loaded but nothing to render
+      } else {
+        m_ChunkMeshes[coords] = m_AssetManager->CreateMesh(meshName, builder);
+      }
+    }
+  }
 }
 
 void Application::Run() {
@@ -255,10 +279,13 @@ void Application::Run() {
 
       m_Renderer->BeginRenderPass(commandBuffer);
 
-      if (auto mesh = m_AssetManager->GetMesh(m_ChunkMesh)) {
-        PushConstantData push{};
-        push.model = glm::mat4(1.0f); // Default identity
-        m_Renderer->DrawMesh(commandBuffer, *m_Pipeline, *mesh, push);
+      PushConstantData push{};
+      push.model = glm::mat4(1.0f);
+
+      for (auto &[coords, handle] : m_ChunkMeshes) {
+        if (auto mesh = m_AssetManager->GetMesh(handle)) {
+          m_Renderer->DrawMesh(commandBuffer, *m_Pipeline, *mesh, push);
+        }
       }
 
       m_Renderer->EndRenderPass(commandBuffer);

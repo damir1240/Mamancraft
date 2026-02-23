@@ -2,6 +2,8 @@
 
 #include "Mamancraft/Core/AssetManager.hpp"
 #include "Mamancraft/Core/InputManager.hpp"
+#include "Mamancraft/Core/TaskSystem.hpp"
+
 #include "Mamancraft/Renderer/Camera.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanMesh.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanPipeline.hpp"
@@ -46,10 +48,13 @@ private:
   std::unique_ptr<AssetManager> m_AssetManager;
   std::unique_ptr<InputManager> m_InputManager;
 
+  // Core
+  std::unique_ptr<TaskSystem> m_TaskSystem;
+
   // Rendering
   std::unique_ptr<VulkanPipeline> m_Pipeline;
   std::unique_ptr<World> m_World;
-  AssetHandle m_ChunkMesh;
+  std::unordered_map<glm::ivec3, AssetHandle> m_ChunkMeshes;
 
   Camera m_Camera;
 

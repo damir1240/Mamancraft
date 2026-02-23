@@ -5,7 +5,6 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <vector>
 
-
 namespace mc {
 
 std::shared_ptr<spdlog::logger> Logger::s_CoreLogger;
@@ -30,8 +29,8 @@ void Logger::Init(const std::string &logFilePath) {
   s_CoreLogger = std::make_shared<spdlog::logger>("MAMANCRAFT", begin(logSinks),
                                                   end(logSinks));
   spdlog::register_logger(s_CoreLogger);
-  s_CoreLogger->set_level(spdlog::level::trace);
-  s_CoreLogger->flush_on(spdlog::level::trace);
+  s_CoreLogger->set_level(spdlog::level::debug);
+  s_CoreLogger->flush_on(spdlog::level::debug);
 }
 
 std::shared_ptr<spdlog::logger> Logger::GetCoreLogger() {

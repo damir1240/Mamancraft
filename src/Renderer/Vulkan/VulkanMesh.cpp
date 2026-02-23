@@ -7,23 +7,27 @@ namespace mc {
 
 VulkanMesh::VulkanMesh(VulkanContext &context, const Builder &builder)
     : m_Context(context) {
-  MC_DEBUG("VulkanMesh: Creating mesh with {} vertices and {} indices", 
+  MC_TRACE("VulkanMesh: Creating mesh with {} vertices and {} indices",
            builder.vertices.size(), builder.indices.size());
   CreateVertexBuffers(builder.vertices);
   CreateIndexBuffers(builder.indices);
-  MC_DEBUG("VulkanMesh: Mesh created successfully");
+  MC_TRACE("VulkanMesh: Mesh created successfully");
 }
 
 VulkanMesh::~VulkanMesh() {
-  MC_DEBUG("VulkanMesh destructor: Destroying mesh (vertex buffer: {}, index buffer: {})",
-           (void*)m_VertexBuffer.get(), (void*)m_IndexBuffer.get());
+  MC_TRACE("VulkanMesh destructor: Destroying mesh (vertex buffer: {}, index "
+           "buffer: {})",
+           (void *)m_VertexBuffer.get(), (void *)m_IndexBuffer.get());
+
   // Buffers will be destroyed automatically by unique_ptr
   // CRITICAL: This must happen BEFORE VMA allocator is destroyed
 }
 
 void VulkanMesh::CreateVertexBuffers(const std::vector<Vertex> &vertices) {
   m_VertexCount = static_cast<uint32_t>(vertices.size());
-  assert(m_VertexCount >= 3 && "Vertex count must be at least 3");
+  if (m_VertexCount == 0)
+    return;
+
   vk::DeviceSize bufferSize = sizeof(vertices[0]) * m_VertexCount;
 
   VulkanBuffer stagingBuffer(
@@ -73,7 +77,10 @@ void VulkanMesh::CreateIndexBuffers(const std::vector<uint32_t> &indices) {
 }
 
 void VulkanMesh::Bind(vk::CommandBuffer commandBuffer) {
+  if (m_VertexCount == 0)
+    return;
   vk::Buffer buffers[] = {m_VertexBuffer->GetBuffer()};
+
   vk::DeviceSize offsets[] = {0};
   commandBuffer.bindVertexBuffers(0, 1, buffers, offsets);
 
@@ -84,7 +91,10 @@ void VulkanMesh::Bind(vk::CommandBuffer commandBuffer) {
 }
 
 void VulkanMesh::Draw(vk::CommandBuffer commandBuffer) {
+  if (m_VertexCount == 0)
+    return;
   if (m_HasIndexBuffer) {
+
     commandBuffer.drawIndexed(m_IndexCount, 1, 0, 0, 0);
   } else {
     commandBuffer.draw(m_VertexCount, 1, 0, 0);
