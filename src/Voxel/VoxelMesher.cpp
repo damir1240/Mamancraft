@@ -139,32 +139,69 @@ void VoxelMesher::AddGreedyFace(VulkanMesh::Builder &builder,
   if (direction > 0)
     bp[axis] += 1.0f;
 
+  // v1..v4 = 4 corners of the quad, going around:
+  //   v1 = (axis1=0, axis2=0)
+  //   v2 = (axis1=height, axis2=0)
+  //   v3 = (axis1=height, axis2=width)
+  //   v4 = (axis1=0, axis2=width)
   glm::vec3 v1(0), v2(0), v3(0), v4(0);
-  v1[axis] = 0;
-  v1[axis1] = 0;
-  v1[axis2] = 0;
-  v2[axis] = 0;
-  v2[axis1] = height;
-  v2[axis2] = 0;
-  v3[axis] = 0;
-  v3[axis1] = height;
-  v3[axis2] = width;
-  v4[axis] = 0;
-  v4[axis1] = 0;
-  v4[axis2] = width;
+  v2[axis1] = (float)height;
+  v3[axis1] = (float)height;
+  v3[axis2] = (float)width;
+  v4[axis2] = (float)width;
 
-  // Normalizing UVs: width and height are the texture repeat factors
-  builder.vertices.push_back(
-      {bp + v1, data.color, {0.0f, 0.0f}, data.texIndex});
-  builder.vertices.push_back(
-      {bp + v2, data.color, {0.0f, (float)height}, data.texIndex});
-  builder.vertices.push_back(
-      {bp + v3, data.color, {(float)width, (float)height}, data.texIndex});
-  builder.vertices.push_back(
-      {bp + v4, data.color, {(float)width, 0.0f}, data.texIndex});
+  // UV mapping: U goes along horizontal world-axis, V goes along vertical (Y).
+  // axis=1 (Y) => top/bottom face: U=axis2(X or Z), V=axis1(Z or X)
+  // axis=0 (X) => right/left face: axis1=Y, axis2=Z  → U=width(Z), V=height(Y)
+  // axis=2 (Z) => front/back face: axis1=Y, axis2=X  → U=width(X), V=height(Y)
+  //
+  // For top/bottom (axis==1): axis1=(X or Z), axis2=(Z or X)
+  //   We want U along axis2, V along axis1  →  corners:
+  //   v1(0,0), v2(0,h), v3(w,h), v4(w,0)  - this is already correct
+  //
+  // For side faces (axis==0 or axis==2):
+  //   axis1 could be Y or horizontal. Let's check:
+  //   axis=0(X): axis1=1(Y), axis2=2(Z) → U=Z(width,k), V=Y(height,j) - correct
+  //   axis=2(Z): axis1=0(X), axis2=1(Y) → but axis2=Y means width goes along Y,
+  //                                         height goes along X - WRONG!
+  //
+  // So for axis=2 we need to swap U and V assignment:
 
-  // Handle winding order based on direction and axis
-  // This is a bit tricky, but for simplicity let's use fixed orders for now
+  glm::vec2 uv1, uv2, uv3, uv4;
+
+  if (axis == 1) {
+    // Top / Bottom: U=axis2, V=axis1
+    uv1 = {0.0f, 0.0f};
+    uv2 = {0.0f, (float)height};
+    uv3 = {(float)width, (float)height};
+    uv4 = {(float)width, 0.0f};
+  } else if (axis == 0) {
+    // Right / Left (X): axis1=Y(vert), axis2=Z(horiz) → U=Z, V=Y
+    // j=axis1=Y goes up, k=axis2=Z goes right → U=width(Z), V=height(Y)
+    // v1(j=0,k=0), v2(j=h,k=0), v3(j=h,k=w), v4(j=0,k=w)
+    // → uv1(0,0), uv2(0,h), uv3(w,h), uv4(w,0)  — U=k, V=j → but V should go 0
+    // at top
+    uv1 = {0.0f, (float)height};         // j=0 → V=height (bottom of tex)
+    uv2 = {0.0f, 0.0f};                  // j=h → V=0      (top of tex)
+    uv3 = {(float)width, 0.0f};          // j=h, k=w
+    uv4 = {(float)width, (float)height}; // j=0, k=w
+  } else {
+    // axis == 2: Front / Back (Z): axis1=X(horiz), axis2=Y(vert)
+    // j=axis1=X goes right, k=axis2=Y goes up
+    // v1(j=0,k=0), v2(j=h,k=0), v3(j=h,k=w), v4(j=0,k=w)
+    // → U=j(X), V=k(Y), but V at k=0 is bottom → need to flip V
+    uv1 = {0.0f, (float)width};          // k=0 → V=width (bottom of tex)
+    uv2 = {(float)height, (float)width}; // j=h, k=0
+    uv3 = {(float)height, 0.0f};         // j=h, k=w → V=0 (top)
+    uv4 = {0.0f, 0.0f};                  // j=0, k=w
+  }
+
+  builder.vertices.push_back({bp + v1, data.color, uv1, data.texIndex});
+  builder.vertices.push_back({bp + v2, data.color, uv2, data.texIndex});
+  builder.vertices.push_back({bp + v3, data.color, uv3, data.texIndex});
+  builder.vertices.push_back({bp + v4, data.color, uv4, data.texIndex});
+
+  // Winding order: front-face CCW when viewed from outside
   if ((axis == 1 && direction > 0) || (axis == 0 && direction < 0) ||
       (axis == 2 && direction > 0)) {
     builder.indices.push_back(startIndex + 0);
