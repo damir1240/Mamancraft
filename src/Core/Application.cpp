@@ -124,13 +124,12 @@ void Application::Init() {
       m_VulkanContext->GetDevice(), *vertShader, *fragShader, pipelineConfig);
 
   m_TaskSystem = std::make_unique<TaskSystem>();
-  m_World = std::make_unique<World>(std::make_unique<WaveTerrainGenerator>(),
-                                    *m_TaskSystem);
+  m_World = std::make_unique<World>(
+      std::make_unique<AdvancedTerrainGenerator>(42), *m_TaskSystem);
 
   // --- Initial World Load ---
-  // Position camera first so World::Update knows what to load
-  m_Camera.SetPosition(
-      {Chunk::SIZE / 2.0f, Chunk::SIZE / 2.0f + 10.0f, Chunk::SIZE * 1.5f});
+  // Position camera just above expected Minecraft-style terrain (base ~64)
+  m_Camera.SetPosition({Chunk::SIZE / 2.0f, 80.0f, Chunk::SIZE / 2.0f});
   m_Camera.SetPerspective(glm::radians(45.0f),
                           (float)m_Config.width / (float)m_Config.height, 0.1f,
                           1000.0f);
@@ -145,6 +144,15 @@ void Application::Init() {
 void Application::Shutdown() {
   MC_INFO("Application::Shutdown() - Starting shutdown sequence");
 
+  // CRITICAL: Stop TaskSystem FIRST to join all worker threads.
+  // Workers reference m_World->m_Generator, so World must still be alive.
+  if (m_TaskSystem)
+    m_TaskSystem.reset();
+
+  // Now safe to destroy World (no more background tasks running)
+  if (m_World)
+    m_World.reset();
+
   if (m_Renderer)
     m_Renderer.reset();
   if (m_Pipeline)
@@ -157,10 +165,6 @@ void Application::Shutdown() {
     m_VulkanContext.reset();
   if (m_InputManager)
     m_InputManager.reset();
-  if (m_World)
-    m_World.reset();
-  if (m_TaskSystem)
-    m_TaskSystem.reset();
   if (m_Window) {
     SDL_DestroyWindow(m_Window);
     m_Window = nullptr;
@@ -180,7 +184,7 @@ void Application::ProcessEvents() {
     if (event.type == SDL_EVENT_WINDOW_RESIZED) {
       m_Camera.SetPerspective(
           glm::radians(45.0f),
-          (float)event.window.data1 / (float)event.window.data2, 0.1f, 100.0f);
+          (float)event.window.data1 / (float)event.window.data2, 0.1f, 1000.0f);
     }
   }
 }

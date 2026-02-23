@@ -5,6 +5,21 @@ namespace mc {
 
 VulkanMesh::Builder VoxelMesher::GenerateMesh(const Chunk &chunk) {
   VulkanMesh::Builder builder;
+
+  // Performance: Quick scan — skip all-air chunks (nothing to draw).
+  // NOTE: All-solid chunks MUST still be meshed because boundary blocks
+  // have exposed faces (neighboring outside-of-chunk = treated as air).
+  bool hasSolid = false;
+  for (int i = 0; i < Chunk::VOLUME && !hasSolid; i++) {
+    int x = i % Chunk::SIZE;
+    int y = (i / Chunk::SIZE) % Chunk::SIZE;
+    int z = i / (Chunk::SIZE * Chunk::SIZE);
+    if (chunk.GetBlock(x, y, z).type != BlockType::Air)
+      hasSolid = true;
+  }
+  if (!hasSolid)
+    return builder;
+
   const glm::vec3 chunkPosOffset = glm::vec3(chunk.GetPosition() * Chunk::SIZE);
   const auto &registry = BlockRegistry::Instance();
 

@@ -48,13 +48,13 @@ private:
   std::unique_ptr<AssetManager> m_AssetManager;
   std::unique_ptr<InputManager> m_InputManager;
 
-  // Core
-  std::unique_ptr<TaskSystem> m_TaskSystem;
-
   // Rendering
   std::unique_ptr<VulkanPipeline> m_Pipeline;
   std::unique_ptr<World> m_World;
   std::unordered_map<glm::ivec3, AssetHandle> m_ChunkMeshes;
+
+  // Core (Task system must be destroyed before objects it references in tasks)
+  std::unique_ptr<TaskSystem> m_TaskSystem;
 
   Camera m_Camera;
 

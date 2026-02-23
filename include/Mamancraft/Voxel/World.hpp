@@ -5,7 +5,6 @@
 #include "Mamancraft/Voxel/Chunk.hpp"
 #include "Mamancraft/Voxel/TerrainGenerator.hpp"
 
-
 #include <glm/gtx/hash.hpp>
 #include <memory>
 #include <mutex>
@@ -14,7 +13,6 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
-
 
 namespace mc {
 
@@ -36,6 +34,12 @@ public:
   void Update(const glm::vec3 &playerPos);
 
   /**
+   * @brief Set the view distance in chunks.
+   */
+  void SetViewDistance(int distance) { m_ViewDistance = distance; }
+  int GetViewDistance() const { return m_ViewDistance; }
+
+  /**
    * @brief Get and clear any newly generated meshes that need GPU upload.
    * This must be called from the main thread.
    */
@@ -49,6 +53,8 @@ private:
 
   std::unique_ptr<TerrainGenerator> m_Generator;
   TaskSystem &m_TaskSystem;
+
+  int m_ViewDistance = 5; // Default radius in chunks (~73 columns at r=5)
 
   std::unordered_map<glm::ivec3, std::shared_ptr<Chunk>> m_Chunks;
   mutable std::shared_mutex m_WorldMutex;

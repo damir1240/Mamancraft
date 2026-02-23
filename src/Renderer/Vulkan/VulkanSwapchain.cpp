@@ -107,12 +107,10 @@ vk::SurfaceFormatKHR VulkanSwapchain::ChooseSwapSurfaceFormat(
 
 vk::PresentModeKHR VulkanSwapchain::ChooseSwapPresentMode(
     const std::vector<vk::PresentModeKHR> &availablePresentModes) {
-  for (const auto &availablePresentMode : availablePresentModes) {
-    if (availablePresentMode == vk::PresentModeKHR::eMailbox) {
-      return availablePresentMode;
-    }
-  }
-  return vk::PresentModeKHR::eFifo; // Guaranteed to be available
+  // Best Practice: Default to FIFO (Vertical Sync) to prevent "coil whine"
+  // and unnecessary power consumption, especially in Release builds.
+  // MAILBOX is nice but can cause GPU whistling at thousands of FPS.
+  return vk::PresentModeKHR::eFifo;
 }
 
 vk::Extent2D VulkanSwapchain::ChooseSwapExtent(

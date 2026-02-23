@@ -1,6 +1,7 @@
 #include "Mamancraft/Voxel/World.hpp"
 #include "Mamancraft/Core/Logger.hpp"
 #include "Mamancraft/Voxel/VoxelMesher.hpp"
+#include <algorithm>
 
 namespace mc {
 
@@ -9,20 +10,58 @@ World::World(std::unique_ptr<TerrainGenerator> generator,
     : m_Generator(std::move(generator)), m_TaskSystem(taskSystem) {}
 
 void World::Update(const glm::vec3 &playerPos) {
-  // Basic implementation: Load a 3x3x3 area around the player if not exists
   glm::ivec3 centerChunk =
       glm::ivec3(glm::floor(playerPos / static_cast<float>(Chunk::SIZE)));
 
-  const int radius = 1; // 3x3x3 for testing
-  for (int x = -radius; x <= radius; x++) {
-    for (int y = -radius; y <= radius; y++) {
+  int radius = m_ViewDistance;
+
+  // Build request list with a single pass
+  std::vector<glm::ivec3> toRequest;
+
+  {
+    std::shared_lock worldLock(m_WorldMutex);
+    std::lock_guard loadingLock(m_LoadingMutex);
+
+    for (int x = -radius; x <= radius; x++) {
       for (int z = -radius; z <= radius; z++) {
-        glm::ivec3 pos = centerChunk + glm::ivec3(x, y, z);
-        if (!HasChunk(pos)) {
-          RequestChunk(pos);
+        // Circular distance check (2D, squared)
+        if (x * x + z * z > radius * radius)
+          continue;
+
+        // Fixed Y range: terrain lives in chunks Y=0..3 (blocks 0-127)
+        // This covers heights 0-127, matching Minecraft-style terrain (base
+        // ~64)
+        for (int y = 0; y <= 3; y++) {
+          glm::ivec3 pos = glm::ivec3(centerChunk.x + x, y, centerChunk.z + z);
+
+          if (m_Chunks.contains(pos) || m_LoadingChunks.contains(pos))
+            continue;
+
+          toRequest.push_back(pos);
         }
       }
     }
+  }
+
+  // Sort by 3D distance, prioritizing player's Y level
+  // Best Practice: Weight Y distance higher so surface chunks load first
+  std::sort(toRequest.begin(), toRequest.end(),
+            [&centerChunk](const glm::ivec3 &a, const glm::ivec3 &b) {
+              glm::ivec3 da = a - centerChunk;
+              glm::ivec3 db = b - centerChunk;
+              // Weighted: horizontal distance + Y distance * 2
+              int distA = da.x * da.x + da.z * da.z + std::abs(da.y) * 4;
+              int distB = db.x * db.x + db.z * db.z + std::abs(db.y) * 4;
+              return distA < distB;
+            });
+
+  // Best Practice: Limit submissions per frame to avoid queue flooding.
+  // This keeps the main thread responsive and ensures the closest chunks
+  // are processed first by the thread pool.
+  constexpr size_t MAX_SUBMISSIONS_PER_FRAME = 32;
+  size_t count = std::min(toRequest.size(), MAX_SUBMISSIONS_PER_FRAME);
+  for (size_t i = 0; i < count; i++) {
+    RequestChunk(toRequest[i]);
   }
 }
 

@@ -19,6 +19,25 @@ public:
 };
 
 /**
+ * @brief Advanced Terrain Generator using FastNoiseLite.
+ * Implements multi-layered noise for majestic terrains.
+ */
+class AdvancedTerrainGenerator : public TerrainGenerator {
+public:
+  AdvancedTerrainGenerator(uint32_t seed = 1337);
+
+  void Generate(Chunk &chunk) const override;
+
+private:
+  uint32_t m_Seed;
+
+  // Internal methods for features (placeholders for now)
+  float GetHeight(float x, float z) const;
+  BlockType GetBiomeAt(float x, float z) const;
+  bool HasCaveAt(float x, float y, float z) const;
+};
+
+/**
  * @brief Simple Wave Generator (Legacy Logic)
  */
 class WaveTerrainGenerator : public TerrainGenerator {

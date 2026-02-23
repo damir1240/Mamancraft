@@ -36,9 +36,13 @@ TaskSystem::~TaskSystem() {
   {
     std::unique_lock<std::mutex> lock(m_QueueMutex);
     m_Stop = true;
+    // Best Practice: Clear pending tasks so we only wait for in-flight ones.
+    // Tasks that haven't started yet would access dead objects after shutdown.
+    std::queue<std::function<void()>> empty;
+    m_Tasks.swap(empty);
   }
   m_Condition.notify_all();
-  // jthreads will automatically join on destruction
+  // jthreads will automatically request_stop() and join on destruction
 }
 
 } // namespace mc
