@@ -2,8 +2,6 @@
 
 #include "Mamancraft/Voxel/Biome.hpp"
 #include "Mamancraft/Voxel/Chunk.hpp"
-#include "Mamancraft/Voxel/RiverGenerator.hpp"
-#include <memory>
 
 namespace mc {
 
@@ -35,7 +33,6 @@ public:
 
 private:
   uint32_t m_Seed;
-  std::unique_ptr<RiverGenerator> m_RiverGen;
 
   // Biome selection based on temperature/humidity noise
   BiomeType GetBiome(float temperature, float humidity) const;

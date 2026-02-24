@@ -7,8 +7,7 @@
 namespace mc {
 
 AdvancedTerrainGenerator::AdvancedTerrainGenerator(uint32_t seed)
-    : m_Seed(seed),
-      m_RiverGen(std::make_unique<RiverGenerator>(seed ^ 0xDEADBEEF)) {}
+    : m_Seed(seed) {}
 
 // ============================================================================
 // Biome Selection (Whittaker-style temperature/humidity classification)
@@ -267,6 +266,39 @@ void AdvancedTerrainGenerator::Generate(Chunk &chunk) const {
   humidityNoise.SetFractalOctaves(3);
   humidityNoise.SetFrequency(0.0015f); // Large-scale
 
+  // ── River noise: FBm contour-line approach ───────────────────────────────
+  //
+  // Theory: a smooth FBm noise field has iso-contours (lines of equal value).
+  // Where abs(noise) ≈ 0, we're crossing the zero-contour — a thin winding
+  // line. These zero-contour lines are EXACTLY what rivers should look like:
+  // organic, winding, non-repeating.
+  //
+  // To make rivers FINITE (with sources/mouths), we multiply by a second
+  // low-frequency "presence" noise. Where presence < 0, the river is
+  // suppressed — this naturally creates gaps that look like river start/end.
+  //
+  // freq=0.002 → river spacing ~500 blocks, long gentle curves
+  FastNoiseLite riverNoise;
+  riverNoise.SetSeed(m_Seed + 600);
+  riverNoise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2S);
+  riverNoise.SetFractalType(FastNoiseLite::FractalType_FBm);
+  riverNoise.SetFractalOctaves(2);
+  riverNoise.SetFrequency(0.002f);
+
+  // Domain warp for riverNoise → adds tight meanders to the winding path
+  FastNoiseLite riverWarpNoise;
+  riverWarpNoise.SetSeed(m_Seed + 700);
+  riverWarpNoise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
+  riverWarpNoise.SetFrequency(0.007f);
+
+  // Presence/mask noise: river only exists where this > RIVER_PRESENCE_MIN.
+  // freq=0.0025 → presence regions ~400 blocks wide → rivers 200-600 blocks
+  // long
+  FastNoiseLite riverMaskNoise;
+  riverMaskNoise.SetSeed(m_Seed + 800);
+  riverMaskNoise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
+  riverMaskNoise.SetFrequency(0.0025f);
+
   // --- Pre-compute heightmap and biome map for this chunk ---
   // Store per-column data to allow tree decoration pass after terrain
   struct ColumnData {
@@ -289,91 +321,112 @@ void AdvancedTerrainGenerator::Generate(Chunk &chunk) const {
       float baseVal = baseNoise.GetNoise(worldX, worldZ);
       float detailVal = detailNoise.GetNoise(worldX, worldZ);
 
-      // Sample mountain noise with DOMAIN WARPING:
-      // warp the x,z coords by a second noise function before sampling
-      // mountain. This creates natural mountain chains and irregular ridge
-      // formations instead of uniform blobs.
-      constexpr float WARP_STRENGTH =
-          80.0f; // How far (in world units) to shift
+      // Mountain noise with domain warping
+      constexpr float WARP_STRENGTH = 80.0f;
       float warpX = warpNoise.GetNoise(worldX, worldZ) * WARP_STRENGTH;
       float warpZ = warpNoise.GetNoise(worldX + 1234.5f, worldZ + 6789.0f) *
                     WARP_STRENGTH;
       float mountainVal =
           (mountainNoise.GetNoise(worldX + warpX, worldZ + warpZ) + 1.0f) *
           0.5f;
-      // mountainVal is now in [0, 1]: 1.0 = sharp ridge peak, 0.0 = valley
 
-      // Calculate height with SMOOTH BIOME BLENDING
-      // This is the key fix: instead of picking one biome height formula,
-      // we blend all three biomes smoothly based on noise weights.
+      // Calculate blended height
       float height = GetTerrainHeightBlended(baseVal, detailVal, mountainVal,
                                              temperature, humidity);
       int iHeight = static_cast<int>(height);
 
-      columns[x][z] = {iHeight, biome};
+      // ── River detection (FBm zero-crossing + tapered presence mask) ─────
+      //
+      // Step 1: Domain-warp for organic meanders
+      constexpr float RIVER_WARP_STR = 25.0f;
+      float rwX = riverWarpNoise.GetNoise(worldX, worldZ) * RIVER_WARP_STR;
+      float rwZ = riverWarpNoise.GetNoise(worldX + 4321.0f, worldZ + 8765.0f) *
+                  RIVER_WARP_STR;
+      float riverVal = riverNoise.GetNoise(worldX + rwX, worldZ + rwZ);
 
-      // Fill the column with terrain
-      for (int y = 0; y < Chunk::SIZE; y++) {
-        int worldY = chunkBottomY + y;
+      // Step 2: Tapered presence mask
+      // Instead of a hard cutoff, smoothstep the mask so rivers GRADUALLY
+      // narrow as the mask approaches the threshold.
+      // → river starts as a thin trickle, widens to full, then tapers back.
+      // This creates convincing visual "sources" and "mouths".
+      float riverMask = riverMaskNoise.GetNoise(worldX, worldZ);
+      constexpr float RIVER_PRESENCE_MIN = 0.10f; // Below this: no river
+      constexpr float RIVER_PRESENCE_FULL =
+          0.35f; // Above this: full-width river
 
-        if (worldY > iHeight) {
-          chunk.SetBlock(x, y, z, {BlockType::Air});
-        } else {
-          if (HasCaveAt(worldX, static_cast<float>(worldY), worldZ)) {
+      // presenceFactor: 0 at edge → 1 at full presence
+      float presenceFactor = (riverMask - RIVER_PRESENCE_MIN) /
+                             (RIVER_PRESENCE_FULL - RIVER_PRESENCE_MIN);
+      presenceFactor = std::max(0.0f, std::min(1.0f, presenceFactor));
+      // Smooth it (ease-in/out)
+      presenceFactor =
+          presenceFactor * presenceFactor * (3.0f - 2.0f * presenceFactor);
+
+      // Step 3: Threshold scales with presence → taper at ends
+      constexpr float RIVER_MAX_THRESHOLD = 0.028f; // Full-width ~5-8 blocks
+      float localThreshold = RIVER_MAX_THRESHOLD * presenceFactor;
+
+      // No river if threshold is essentially zero (no presence)
+      bool isRiver =
+          (presenceFactor > 0.01f) && (std::abs(riverVal) < localThreshold) &&
+          (biome != BiomeType::Mountain) && (iHeight > 57) && (iHeight < 79);
+
+      if (isRiver) {
+        biome = BiomeType::River;
+        // Depth scales with both channel position and presence
+        float channelFactor = 1.0f - (std::abs(riverVal) / localThreshold);
+        float depthFactor = channelFactor * presenceFactor;
+        int carveDepth = 2 + static_cast<int>(depthFactor * 3.0f); // 2..5
+        int waterSurfaceY = iHeight - 1;
+        int bedY = waterSurfaceY - carveDepth;
+
+        // Fill column
+        for (int y = 0; y < Chunk::SIZE; y++) {
+          int worldY = chunkBottomY + y;
+          if (worldY > iHeight) {
             chunk.SetBlock(x, y, z, {BlockType::Air});
-            continue;
-          }
-
-          BlockType type;
-          if (worldY < BEDROCK_MAX) {
-            type = BlockType::Bedrock;
-          } else if (worldY == iHeight) {
-            type = GetSurfaceBlock(biome, worldY, iHeight);
-          } else if (worldY > iHeight - DIRT_DEPTH) {
-            type = BlockType::Dirt;
+          } else if (worldY > waterSurfaceY) {
+            // Carve above water (remove terrain to expose river)
+            chunk.SetBlock(x, y, z, {BlockType::Air});
+          } else if (worldY >= bedY) {
+            if (worldY <= bedY + 1) {
+              chunk.SetBlock(x, y, z, {BlockType::Stone}); // river bed
+            } else {
+              chunk.SetBlock(x, y, z, {BlockType::Water}); // water
+            }
+          } else if (worldY < BEDROCK_MAX) {
+            chunk.SetBlock(x, y, z, {BlockType::Bedrock});
           } else {
-            type = BlockType::Stone;
+            chunk.SetBlock(x, y, z, {BlockType::Stone});
           }
-
-          chunk.SetBlock(x, y, z, {type});
         }
-      }
-    }
-  }
-
-  // --- River Pass ---
-  // RiverGenerator is O(1) per column (noise threshold).
-  // For river columns: carve a trench and fill with water.
-  for (int x = 0; x < Chunk::SIZE; x++) {
-    for (int z = 0; z < Chunk::SIZE; z++) {
-      int iWX = chunkPos.x * Chunk::SIZE + x;
-      int iWZ = chunkPos.z * Chunk::SIZE + z;
-      int terrainH = columns[x][z].height;
-
-      int waterSurfaceY = 0, riverDepth = 0;
-      if (!m_RiverGen->IsRiverAt(iWX, iWZ, terrainH, waterSurfaceY, riverDepth))
-        continue;
-
-      int bedY = waterSurfaceY - riverDepth; // bottom of river bed
-      int surfY = waterSurfaceY;             // water surface
-
-      for (int y = 0; y < Chunk::SIZE; y++) {
-        int worldY = chunkBottomY + y;
-
-        if (worldY > surfY && worldY <= terrainH) {
-          // Carve: remove terrain above water surface to form the trench
-          chunk.SetBlock(x, y, z, {BlockType::Air});
-        } else if (worldY >= bedY && worldY <= surfY) {
-          if (worldY <= bedY + 1) {
-            chunk.SetBlock(x, y, z, {BlockType::Stone}); // river bed
+      } else {
+        // Normal terrain column
+        for (int y = 0; y < Chunk::SIZE; y++) {
+          int worldY = chunkBottomY + y;
+          if (worldY > iHeight) {
+            chunk.SetBlock(x, y, z, {BlockType::Air});
           } else {
-            chunk.SetBlock(x, y, z, {BlockType::Water}); // water body
+            if (HasCaveAt(worldX, static_cast<float>(worldY), worldZ)) {
+              chunk.SetBlock(x, y, z, {BlockType::Air});
+              continue;
+            }
+            BlockType type;
+            if (worldY < BEDROCK_MAX) {
+              type = BlockType::Bedrock;
+            } else if (worldY == iHeight) {
+              type = GetSurfaceBlock(biome, worldY, iHeight);
+            } else if (worldY > iHeight - DIRT_DEPTH) {
+              type = BlockType::Dirt;
+            } else {
+              type = BlockType::Stone;
+            }
+            chunk.SetBlock(x, y, z, {type});
           }
         }
       }
 
-      // Suppress trees over rivers
-      columns[x][z].biome = BiomeType::Plains;
+      columns[x][z] = {iHeight, biome};
     }
   }
 

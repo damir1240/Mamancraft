@@ -4,7 +4,13 @@
 
 namespace mc {
 
-enum class BiomeType : uint8_t { Plains = 0, OakForest, Mountain, Count };
+enum class BiomeType : uint8_t {
+  Plains = 0,
+  OakForest,
+  Mountain,
+  River,
+  Count
+};
 
 struct BiomeInfo {
   BiomeType type;
@@ -28,6 +34,9 @@ inline BiomeInfo GetBiomeInfo(BiomeType biome) {
 
   case BiomeType::Mountain:
     return {BiomeType::Mountain, BlockType::Grass, BlockType::Dirt, 0.0f, 80};
+
+  case BiomeType::River:
+    return {BiomeType::River, BlockType::Water, BlockType::Stone, 0.0f, 999};
 
   default:
     return {BiomeType::Plains, BlockType::Grass, BlockType::Dirt, 0.0f, 999};

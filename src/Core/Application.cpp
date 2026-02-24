@@ -8,6 +8,7 @@
 
 #include <SDL3/SDL_assert.h>
 #include <chrono>
+#include <random>
 #include <spdlog/fmt/fmt.h>
 #include <stdexcept>
 
@@ -129,8 +130,14 @@ void Application::Init() {
       m_VulkanContext->GetDevice(), *vertShader, *fragShader, pipelineConfig);
 
   m_TaskSystem = std::make_unique<TaskSystem>();
+
+  // Random world seed based on system time
+  uint32_t worldSeed = static_cast<uint32_t>(
+      std::chrono::steady_clock::now().time_since_epoch().count() & 0xFFFFFFFF);
+  MC_INFO("World seed: {}", worldSeed);
+
   m_World = std::make_unique<World>(
-      std::make_unique<AdvancedTerrainGenerator>(42), *m_TaskSystem);
+      std::make_unique<AdvancedTerrainGenerator>(worldSeed), *m_TaskSystem);
 
   // --- Initial World Load ---
   // Position camera just above expected Minecraft-style terrain (base ~64)
