@@ -31,7 +31,9 @@ void World::Update(const glm::vec3 &playerPos) {
         // Fixed Y range: terrain lives in chunks Y=0..3 (blocks 0-127)
         // This covers heights 0-127, matching Minecraft-style terrain (base
         // ~64)
-        for (int y = 0; y <= 3; y++) {
+        // Vertical range: Y=-2..5 (blocks -64..191)
+        // Provides 128 blocks down and 128 blocks up from sea level (64).
+        for (int y = -2; y <= 5; y++) {
           glm::ivec3 pos = glm::ivec3(centerChunk.x + x, y, centerChunk.z + z);
 
           if (m_Chunks.contains(pos) || m_LoadingChunks.contains(pos))

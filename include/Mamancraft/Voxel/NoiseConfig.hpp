@@ -97,13 +97,13 @@ namespace world_cfg {
 /// Базовая высота поверхности (уровень моря = BASE_HEIGHT)
 inline constexpr float BASE_HEIGHT = 64.0f;
 /// Ниже этого Y всегда bedrock
-inline constexpr int BEDROCK_MAX = 5;
+inline constexpr int BEDROCK_MAX = -60;
 /// Глубина dirt-слоя под grass
 inline constexpr int DIRT_DEPTH = 4;
 /// Максимальный сдвиг горных хребтов вверх (блоки) — задаёт MAX_HEIGHT
 inline constexpr float MOUNTAIN_MAX_AMPLITUDE = 90.0f;
 /// Минимально возможная высота terrain
-inline constexpr int MIN_HEIGHT = static_cast<int>(BASE_HEIGHT) - 13;
+inline constexpr int MIN_HEIGHT = -64;
 /// Максимально возможная высота terrain
 inline constexpr int MAX_HEIGHT = static_cast<int>(BASE_HEIGHT) + 13 + 4 +
                                   static_cast<int>(MOUNTAIN_MAX_AMPLITUDE);
