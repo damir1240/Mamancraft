@@ -1,203 +1,143 @@
 #include "Mamancraft/Voxel/TerrainGenerator.hpp"
-#include "FastNoiseLite.h"
+#include "Mamancraft/Voxel/NoiseConfig.hpp"
 #include "Mamancraft/Voxel/OakTreeGenerator.hpp"
 #include <algorithm>
 #include <cmath>
 
 namespace mc {
 
+// ============================================================================
+// AdvancedTerrainGenerator
+// ============================================================================
+
 AdvancedTerrainGenerator::AdvancedTerrainGenerator(uint32_t seed)
-    : m_Seed(seed) {}
+    : m_Seed(seed), m_Sampler(seed) {}
 
 // ============================================================================
-// Biome Selection (Whittaker-style temperature/humidity classification)
-// ============================================================================
-
-BiomeType AdvancedTerrainGenerator::GetBiome(float temperature,
-                                             float humidity) const {
-  // Used for tree placement and surface block logic only.
-  // Terrain HEIGHT uses smooth blending (see GetTerrainHeight below).
-  if (temperature > 0.35f)
-    return BiomeType::Mountain;
-  if (temperature < -0.2f || humidity < -0.3f)
-    return BiomeType::Plains;
-  return BiomeType::OakForest;
-}
-
-// ============================================================================
-// Terrain Height — SMOOTH BIOME BLENDING
-// ============================================================================
+// GetSurfaceBlock — data-driven, читает параметры из BiomeDefinition.
 //
-// Best Practice: instead of switching height formulas at a hard boundary,
-// we give each biome a continuous influence weight derived from noise values,
-// then lerp between all biome heights proportionally.
-//
-// Weight functions use smoothstep so influence ramps up/down gradually.
-// Result: mountain peaks naturally taper into forest hills, which gently
-// flatten into plains — no visible seam anywhere.
+// Best Practice: нет switch/case по BiomeType.
+// Логика «когда наступает камень» обобщена через stoneStartFactor.
 // ============================================================================
 
-static float smoothstep(float edge0, float edge1, float x) {
-  float t = std::clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
-  return t * t * (3.0f - 2.0f * t);
-}
+BlockType AdvancedTerrainGenerator::GetSurfaceBlock(
+    const BiomeDefinition &def, int worldY, int terrainHeight) const noexcept {
+  using namespace world_cfg;
 
-float AdvancedTerrainGenerator::GetTerrainHeight(float baseVal, float detailVal,
-                                                 float mountainVal,
-                                                 BiomeType /*unused*/) const {
-  // Legacy stub — real work done by GetTerrainHeightBlended.
-  constexpr float BASE_HEIGHT = 64.0f;
-  return BASE_HEIGHT + baseVal * 8.0f + detailVal * 3.0f;
-}
-
-float AdvancedTerrainGenerator::GetTerrainHeightBlended(float baseVal,
-                                                        float detailVal,
-                                                        float mountainRidgeVal,
-                                                        float temperature,
-                                                        float humidity) const {
-
-  constexpr float BASE_HEIGHT = 64.0f;
-
-  // ── Per-biome height contributions ──────────────────────────────────────
-  float heightPlains = BASE_HEIGHT + baseVal * 5.0f + detailVal * 1.5f;
-  float heightForest = BASE_HEIGHT + baseVal * 10.0f + detailVal * 3.0f;
-
-  // Mountain: Ridged Multifractal noise produces sharp ridge lines.
-  // mountainRidgeVal is in [0,1] (already abs-inverted by FractalType_Ridged):
-  //   values close to 1.0 = ridge peaks, values near 0 = valleys
-  //
-  // We apply a power curve to sharpen peaks further, then scale to height.
-  float ridgePeak = mountainRidgeVal;                  // [0, 1] ridge value
-  ridgePeak = ridgePeak * ridgePeak * ridgePeak;       // sharpen: power 3
-  float heightMountain = BASE_HEIGHT + baseVal * 12.0f // broad base shape
-                         + detailVal * 4.0f            // surface detail
-                         + ridgePeak * 90.0f;          // dramatic ridge peaks
-
-  // ── Biome weights ───────────────────────────────────────────────────────
-  float wMountain = smoothstep(0.20f, 0.50f, temperature);
-  float wPlainsTemp = smoothstep(-0.10f, -0.35f, temperature);
-  float wPlainsHum = smoothstep(-0.15f, -0.40f, humidity);
-  float wPlains = std::max(wPlainsTemp, wPlainsHum);
-  wPlains = std::max(0.0f, wPlains - wMountain);
-  float wForest = std::max(0.0f, 1.0f - wMountain - wPlains);
-
-  float totalWeight = wMountain + wPlains + wForest;
-  if (totalWeight < 1e-6f)
-    return heightForest;
-
-  return (wMountain * heightMountain + wPlains * heightPlains +
-          wForest * heightForest) /
-         totalWeight;
-}
-
-// ============================================================================
-// Surface Block (biome-specific + mountain stone threshold)
-// ============================================================================
-
-BlockType AdvancedTerrainGenerator::GetSurfaceBlock(BiomeType biome, int worldY,
-                                                    int terrainHeight) const {
-  BiomeInfo info = GetBiomeInfo(biome);
-
-  // Mountains: stone appears on the UPPER part of mountain terrain.
-  // Instead of a fixed absolute Y, use relative fraction of terrain height.
-  // This ensures stone caps appear only near peaks, not at all altitude.
-  if (biome == BiomeType::Mountain) {
-    constexpr float BASE_HEIGHT = 64.0f;
-    // Stone starts at ~65% above base (so foothills stay grassy)
-    float stoneStart = BASE_HEIGHT + (terrainHeight - BASE_HEIGHT) * 0.65f;
-    // Hard minimum: never stone below Y=85
-    stoneStart = std::max(stoneStart, 85.0f);
+  // Горный биом: камень появляется в верхней части хребта.
+  // stoneStartFactor == 999 → камень на поверхности никогда не появляется.
+  if (def.stoneStartFactor < 999) {
+    // Камень стартует с высоты BASE + (amplitude * factor / 100)
+    float stoneStart =
+        BASE_HEIGHT + (terrainHeight - BASE_HEIGHT) *
+                          (static_cast<float>(def.stoneStartFactor) / 100.0f);
+    // Жёсткий минимум: никогда ниже BASE + 20 блоков (предотвращает
+    // каменные холмы у подножий)
+    stoneStart = std::max(stoneStart, BASE_HEIGHT + 20.0f);
     if (worldY >= static_cast<int>(stoneStart)) {
       return BlockType::Stone;
     }
   }
 
-  return info.surfaceBlock;
+  return def.surfaceBlock;
 }
 
 // ============================================================================
-// Tree Placement (deterministic hash-based)
+// ShouldPlaceTree — детерминированная расстановка через Jittered Grid.
+//
+// Best Practice: одно дерево на ячейку CELL_SIZE×CELL_SIZE,
+// позиция внутри ячейки задаётся хэш-джиттером.
+// Результат: деревья не стоят в ряд, но и не образуют кластеры.
 // ============================================================================
 
-bool AdvancedTerrainGenerator::ShouldPlaceTree(int worldX, int worldZ,
-                                               BiomeType biome) const {
-  BiomeInfo info = GetBiomeInfo(biome);
-  if (info.treeDensity <= 0.0f)
+bool AdvancedTerrainGenerator::ShouldPlaceTree(
+    int worldX, int worldZ, const BiomeDefinition &def) const noexcept {
+
+  if (def.treeDensity <= 0.0f)
     return false;
 
-  // Best Practice: JITTERED GRID placement (avoids "Madrid grid" pattern)
-  // 1. Divide world into cells of CELL_SIZE
-  // 2. Each cell gets at most ONE tree
-  // 3. Tree position within cell is offset by hash-based jitter
-  // 4. We check if THIS world position is the chosen tree spot for its cell
+  using namespace world_cfg;
 
-  constexpr int CELL_SIZE = 10; // Cell dimensions
+  // Ячейка, к которой принадлежит эта мировая позиция
+  // (корректная целочисленная div для отрицательных координат)
+  auto floorDiv = [](int a, int b) -> int {
+    return a / b - (a % b != 0 && (a ^ b) < 0);
+  };
 
-  // Find which cell this position belongs to
-  int cellX = (worldX >= 0) ? (worldX / CELL_SIZE)
-                            : ((worldX - CELL_SIZE + 1) / CELL_SIZE);
-  int cellZ = (worldZ >= 0) ? (worldZ / CELL_SIZE)
-                            : ((worldZ - CELL_SIZE + 1) / CELL_SIZE);
+  int cellX = floorDiv(worldX, TREE_CELL_SIZE);
+  int cellZ = floorDiv(worldZ, TREE_CELL_SIZE);
 
-  // Hash the cell to get deterministic random values
-  uint32_t cellHash = m_Seed * 16777619u;
-  cellHash ^= static_cast<uint32_t>(cellX) * 374761393u;
-  cellHash ^= static_cast<uint32_t>(cellZ) * 668265263u;
-  cellHash = (cellHash ^ (cellHash >> 13)) * 1274126177u;
-  cellHash = cellHash ^ (cellHash >> 16);
+  // Детерминированный хэш ячейки (FNV-like, как в ранней версии)
+  uint32_t h = m_Seed * 16777619u;
+  h ^= static_cast<uint32_t>(cellX) * 374761393u;
+  h ^= static_cast<uint32_t>(cellZ) * 668265263u;
+  h = (h ^ (h >> 13)) * 1274126177u;
+  h ^= h >> 16;
 
-  // Density check: does this cell even have a tree?
-  float chance = static_cast<float>(cellHash & 0xFFFF) / 65536.0f;
-  if (chance > info.treeDensity * 15.0f) // Scale density by cell area
+  // Вероятностный отбор: масштабируем плотность на площадь ячейки
+  float chance = static_cast<float>(h & 0xFFFFu) / 65536.0f;
+  if (chance > def.treeDensity * static_cast<float>(TREE_CELL_SIZE)) {
     return false;
+  }
 
-  // Jittered position within cell: offset ±3 from cell center
-  int cellBaseX = cellX * CELL_SIZE;
-  int cellBaseZ = cellZ * CELL_SIZE;
-  int jitterX = static_cast<int>((cellHash >> 4) & 0x7) - 3; // -3 to +4
-  int jitterZ = static_cast<int>((cellHash >> 8) & 0x7) - 3; // -3 to +4
-  int treeX = cellBaseX + CELL_SIZE / 2 + jitterX;
-  int treeZ = cellBaseZ + CELL_SIZE / 2 + jitterZ;
+  // Джиттер: случайное смещение центра ячейки в диапазоне −3..+4
+  int cellBaseX = cellX * TREE_CELL_SIZE;
+  int cellBaseZ = cellZ * TREE_CELL_SIZE;
+  int jitterX = static_cast<int>((h >> 4) & 0x7u) - 3;
+  int jitterZ = static_cast<int>((h >> 8) & 0x7u) - 3;
+  int treeX = cellBaseX + TREE_CELL_SIZE / 2 + jitterX;
+  int treeZ = cellBaseZ + TREE_CELL_SIZE / 2 + jitterZ;
 
-  // Only the exact jittered position triggers a tree
   return (worldX == treeX && worldZ == treeZ);
 }
 
 // ============================================================================
-// Cave Generation (placeholder)
+// HasCaveAt — заглушка для будущих 3D-пещер.
+// Task: заменить на Perlin Worms или Simplex 3D Cave noise.
 // ============================================================================
 
-bool AdvancedTerrainGenerator::HasCaveAt(float x, float y, float z) const {
+bool AdvancedTerrainGenerator::HasCaveAt(float /*x*/, float /*y*/,
+                                         float /*z*/) const noexcept {
   return false;
 }
 
 // ============================================================================
-// Main Generation
+// Generate — главный метод. Двухпроходная архитектура:
+//
+//   Pass 1 — Terrain Pass
+//     Для каждой колонки (x, z):
+//       a) HeightmapSampler::Sample() → ColumnSample (климат, высота, биом)
+//       b) Заполнить вертикальный столбец блоками согласно ColumnSample
+//     Кэшируем ColumnSample в columns[][] для Pass 2.
+//
+//   Pass 2 — Decoration Pass (Neighbor-Aware)
+//     Сканируем регион CHUNK + SCAN_MARGIN со всех сторон.
+//     Для позиций внутри чанка — берём данные из кэша.
+//     Для позиций снаружи — вызываем HeightmapSampler::Sample() повторно.
+//     Размещаем деревья, которые физически попадают в этот чанк.
+//
+// Ранние выходы (early-exit):
+//   — Чанк полностью выше MAX_HEIGHT → весь воздух, return.
+//   — Чанк полностью ниже MIN_HEIGHT → всё камень/бедрок, return.
 // ============================================================================
 
 void AdvancedTerrainGenerator::Generate(Chunk &chunk) const {
+  using namespace world_cfg;
+
   const glm::ivec3 chunkPos = chunk.GetPosition();
+  const int chunkBottomY = chunkPos.y * Chunk::SIZE;
+  const int chunkTopY = chunkBottomY + Chunk::SIZE - 1;
 
-  constexpr int DIRT_DEPTH = 4;
-  constexpr int BEDROCK_MAX = 5;
-  constexpr int MIN_HEIGHT = 51; // BASE(64) - max_amplitude(13)
-  constexpr int MAX_HEIGHT =
-      107; // BASE(64) + hills(10) + detail(3) + mountain(35)
-
-  int chunkBottomY = chunkPos.y * Chunk::SIZE;
-  int chunkTopY = chunkBottomY + Chunk::SIZE - 1;
-
-  // EARLY EXIT: Chunk entirely above max terrain → all air
-  if (chunkBottomY > MAX_HEIGHT) {
+  // ── Early Exit: чанк выше всего рельефа → оставляем воздух ───────────────
+  if (chunkBottomY > MAX_HEIGHT)
     return;
-  }
 
-  // EARLY EXIT: Chunk entirely below min terrain → all stone + bedrock
+  // ── Early Exit: чанк ниже минимального рельефа → всё каменное/бедровое ───
   if (chunkTopY < MIN_HEIGHT) {
-    for (int x = 0; x < Chunk::SIZE; x++) {
-      for (int z = 0; z < Chunk::SIZE; z++) {
-        for (int y = 0; y < Chunk::SIZE; y++) {
-          int worldY = chunkBottomY + y;
+    for (int x = 0; x < Chunk::SIZE; ++x) {
+      for (int z = 0; z < Chunk::SIZE; ++z) {
+        for (int y = 0; y < Chunk::SIZE; ++y) {
+          const int worldY = chunkBottomY + y;
           chunk.SetBlock(
               x, y, z,
               {worldY < BEDROCK_MAX ? BlockType::Bedrock : BlockType::Stone});
@@ -207,284 +147,116 @@ void AdvancedTerrainGenerator::Generate(Chunk &chunk) const {
     return;
   }
 
-  // --- Noise Configuration ---
+  // ── Кэш результатов сэмплирования для Pass 2 ─────────────────────────────
+  ColumnSample columns[Chunk::SIZE][Chunk::SIZE];
 
-  // Base terrain: broad gentle hills
-  FastNoiseLite baseNoise;
-  baseNoise.SetSeed(m_Seed);
-  baseNoise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
-  baseNoise.SetFractalType(FastNoiseLite::FractalType_FBm);
-  baseNoise.SetFractalOctaves(4);
-  baseNoise.SetFractalLacunarity(2.0f);
-  baseNoise.SetFractalGain(0.5f);
-  baseNoise.SetFrequency(0.003f);
+  // ==========================================================================
+  // PASS 1 — TERRAIN
+  // Порядок x → z → y обеспечивает наилучшую cache-locality:
+  //   heightmap читается построчно, вертикальный стек блоков обходится
+  //   последовательно по памяти (layout: x + y*SIZE + z*SIZE*SIZE).
+  // ==========================================================================
 
-  // Detail: fine surface bumps
-  FastNoiseLite detailNoise;
-  detailNoise.SetSeed(m_Seed + 100);
-  detailNoise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
-  detailNoise.SetFractalType(FastNoiseLite::FractalType_FBm);
-  detailNoise.SetFractalOctaves(2);
-  detailNoise.SetFrequency(0.02f);
+  const int chunkWorldX = chunkPos.x * Chunk::SIZE;
+  const int chunkWorldZ = chunkPos.z * Chunk::SIZE;
 
-  // Mountain: Ridged Multifractal — creates sharp peaks and ridge lines
-  // Best Practice: FractalType_Ridged inverts the absolute value, giving
-  // spike-like peaks instead of smooth bumps. Combined with domain warping,
-  // this produces natural mountain chains with varied peak heights.
-  FastNoiseLite mountainNoise;
-  mountainNoise.SetSeed(m_Seed + 200);
-  mountainNoise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
-  mountainNoise.SetFractalType(
-      FastNoiseLite::FractalType_Ridged); // KEY: ridges!
-  mountainNoise.SetFractalOctaves(5); // More octaves = more detail on slopes
-  mountainNoise.SetFractalLacunarity(2.2f);
-  mountainNoise.SetFractalGain(0.5f);
-  mountainNoise.SetFrequency(0.0018f); // Mid-scale: mountain ranges
+  for (int x = 0; x < Chunk::SIZE; ++x) {
+    for (int z = 0; z < Chunk::SIZE; ++z) {
+      const float worldX = static_cast<float>(chunkWorldX + x);
+      const float worldZ = static_cast<float>(chunkWorldZ + z);
 
-  // Domain Warp noise: displaces mountain sampling coordinates organically.
-  // This breaks up the regular noise pattern into flowing ridges and chains.
-  FastNoiseLite warpNoise;
-  warpNoise.SetSeed(m_Seed + 500);
-  warpNoise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
-  warpNoise.SetFractalType(FastNoiseLite::FractalType_FBm);
-  warpNoise.SetFractalOctaves(2);
-  warpNoise.SetFrequency(0.0008f); // Warp at large scale = mountain chains
+      // Получаем всё о колонке за один вызов (климат + биом + высота)
+      const ColumnSample sample = m_Sampler.Sample(worldX, worldZ);
+      columns[x][z] = sample;
 
-  // Biome noise: temperature
-  FastNoiseLite temperatureNoise;
-  temperatureNoise.SetSeed(m_Seed + 300);
-  temperatureNoise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
-  temperatureNoise.SetFractalType(FastNoiseLite::FractalType_FBm);
-  temperatureNoise.SetFractalOctaves(3);
-  temperatureNoise.SetFrequency(0.001f); // Very large-scale biome regions
+      const int iHeight = static_cast<int>(sample.height);
+      const BiomeDefinition &def = GetBiomeDef(sample.biome);
 
-  // Biome noise: humidity
-  FastNoiseLite humidityNoise;
-  humidityNoise.SetSeed(m_Seed + 400);
-  humidityNoise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
-  humidityNoise.SetFractalType(FastNoiseLite::FractalType_FBm);
-  humidityNoise.SetFractalOctaves(3);
-  humidityNoise.SetFrequency(0.0015f); // Large-scale
+      // ── Заполнение вертикального столбца ──────────────────────────────────
+      for (int y = 0; y < Chunk::SIZE; ++y) {
+        const int worldY = chunkBottomY + y;
 
-  // ── River noise: FBm contour-line approach ───────────────────────────────
-  //
-  // Theory: a smooth FBm noise field has iso-contours (lines of equal value).
-  // Where abs(noise) ≈ 0, we're crossing the zero-contour — a thin winding
-  // line. These zero-contour lines are EXACTLY what rivers should look like:
-  // organic, winding, non-repeating.
-  //
-  // To make rivers FINITE (with sources/mouths), we multiply by a second
-  // low-frequency "presence" noise. Where presence < 0, the river is
-  // suppressed — this naturally creates gaps that look like river start/end.
-  //
-  // freq=0.002 → river spacing ~500 blocks, long gentle curves
-  FastNoiseLite riverNoise;
-  riverNoise.SetSeed(m_Seed + 600);
-  riverNoise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2S);
-  riverNoise.SetFractalType(FastNoiseLite::FractalType_FBm);
-  riverNoise.SetFractalOctaves(2);
-  riverNoise.SetFrequency(0.002f);
-
-  // Domain warp for riverNoise → adds tight meanders to the winding path
-  FastNoiseLite riverWarpNoise;
-  riverWarpNoise.SetSeed(m_Seed + 700);
-  riverWarpNoise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
-  riverWarpNoise.SetFrequency(0.007f);
-
-  // Presence/mask noise: river only exists where this > RIVER_PRESENCE_MIN.
-  // freq=0.0025 → presence regions ~400 blocks wide → rivers 200-600 blocks
-  // long
-  FastNoiseLite riverMaskNoise;
-  riverMaskNoise.SetSeed(m_Seed + 800);
-  riverMaskNoise.SetNoiseType(FastNoiseLite::NoiseType_OpenSimplex2);
-  riverMaskNoise.SetFrequency(0.0025f);
-
-  // --- Pre-compute heightmap and biome map for this chunk ---
-  // Store per-column data to allow tree decoration pass after terrain
-  struct ColumnData {
-    int height;
-    BiomeType biome;
-  };
-  ColumnData columns[Chunk::SIZE][Chunk::SIZE];
-
-  for (int x = 0; x < Chunk::SIZE; x++) {
-    for (int z = 0; z < Chunk::SIZE; z++) {
-      float worldX = static_cast<float>(chunkPos.x * Chunk::SIZE + x);
-      float worldZ = static_cast<float>(chunkPos.z * Chunk::SIZE + z);
-
-      // Sample biome noise
-      float temperature = temperatureNoise.GetNoise(worldX, worldZ);
-      float humidity = humidityNoise.GetNoise(worldX, worldZ);
-      BiomeType biome = GetBiome(temperature, humidity);
-
-      // Sample base terrain noise
-      float baseVal = baseNoise.GetNoise(worldX, worldZ);
-      float detailVal = detailNoise.GetNoise(worldX, worldZ);
-
-      // Mountain noise with domain warping
-      constexpr float WARP_STRENGTH = 80.0f;
-      float warpX = warpNoise.GetNoise(worldX, worldZ) * WARP_STRENGTH;
-      float warpZ = warpNoise.GetNoise(worldX + 1234.5f, worldZ + 6789.0f) *
-                    WARP_STRENGTH;
-      float mountainVal =
-          (mountainNoise.GetNoise(worldX + warpX, worldZ + warpZ) + 1.0f) *
-          0.5f;
-
-      // Calculate blended height
-      float height = GetTerrainHeightBlended(baseVal, detailVal, mountainVal,
-                                             temperature, humidity);
-      int iHeight = static_cast<int>(height);
-
-      // ── River detection (FBm zero-crossing + tapered presence mask) ─────
-      //
-      // Step 1: Domain-warp for organic meanders
-      constexpr float RIVER_WARP_STR = 25.0f;
-      float rwX = riverWarpNoise.GetNoise(worldX, worldZ) * RIVER_WARP_STR;
-      float rwZ = riverWarpNoise.GetNoise(worldX + 4321.0f, worldZ + 8765.0f) *
-                  RIVER_WARP_STR;
-      float riverVal = riverNoise.GetNoise(worldX + rwX, worldZ + rwZ);
-
-      // Step 2: Tapered presence mask
-      // Instead of a hard cutoff, smoothstep the mask so rivers GRADUALLY
-      // narrow as the mask approaches the threshold.
-      // → river starts as a thin trickle, widens to full, then tapers back.
-      // This creates convincing visual "sources" and "mouths".
-      float riverMask = riverMaskNoise.GetNoise(worldX, worldZ);
-      constexpr float RIVER_PRESENCE_MIN = 0.10f; // Below this: no river
-      constexpr float RIVER_PRESENCE_FULL =
-          0.35f; // Above this: full-width river
-
-      // presenceFactor: 0 at edge → 1 at full presence
-      float presenceFactor = (riverMask - RIVER_PRESENCE_MIN) /
-                             (RIVER_PRESENCE_FULL - RIVER_PRESENCE_MIN);
-      presenceFactor = std::max(0.0f, std::min(1.0f, presenceFactor));
-      // Smooth it (ease-in/out)
-      presenceFactor =
-          presenceFactor * presenceFactor * (3.0f - 2.0f * presenceFactor);
-
-      // Step 3: Threshold scales with presence → taper at ends
-      constexpr float RIVER_MAX_THRESHOLD = 0.028f; // Full-width ~5-8 blocks
-      float localThreshold = RIVER_MAX_THRESHOLD * presenceFactor;
-
-      // No river if threshold is essentially zero (no presence)
-      bool isRiver =
-          (presenceFactor > 0.01f) && (std::abs(riverVal) < localThreshold) &&
-          (biome != BiomeType::Mountain) && (iHeight > 57) && (iHeight < 79);
-
-      if (isRiver) {
-        biome = BiomeType::River;
-        // Depth scales with both channel position and presence
-        float channelFactor = 1.0f - (std::abs(riverVal) / localThreshold);
-        float depthFactor = channelFactor * presenceFactor;
-        int carveDepth = 2 + static_cast<int>(depthFactor * 3.0f); // 2..5
-        int waterSurfaceY = iHeight - 1;
-        int bedY = waterSurfaceY - carveDepth;
-
-        // Fill column
-        for (int y = 0; y < Chunk::SIZE; y++) {
-          int worldY = chunkBottomY + y;
-          if (worldY > iHeight) {
-            chunk.SetBlock(x, y, z, {BlockType::Air});
-          } else if (worldY > waterSurfaceY) {
-            // Carve above water (remove terrain to expose river)
-            chunk.SetBlock(x, y, z, {BlockType::Air});
-          } else if (worldY >= bedY) {
-            if (worldY <= bedY + 1) {
-              chunk.SetBlock(x, y, z, {BlockType::Stone}); // river bed
-            } else {
-              chunk.SetBlock(x, y, z, {BlockType::Water}); // water
-            }
-          } else if (worldY < BEDROCK_MAX) {
-            chunk.SetBlock(x, y, z, {BlockType::Bedrock});
-          } else {
-            chunk.SetBlock(x, y, z, {BlockType::Stone});
-          }
+        if (worldY > iHeight) {
+          // Выше поверхности — воздух (Chunk инициализирован Air по умолчанию)
+          // chunk.SetBlock(x, y, z, {BlockType::Air}); // избыточно, но явно
+          continue;
         }
-      } else {
-        // Normal terrain column
-        for (int y = 0; y < Chunk::SIZE; y++) {
-          int worldY = chunkBottomY + y;
-          if (worldY > iHeight) {
-            chunk.SetBlock(x, y, z, {BlockType::Air});
-          } else {
-            if (HasCaveAt(worldX, static_cast<float>(worldY), worldZ)) {
-              chunk.SetBlock(x, y, z, {BlockType::Air});
-              continue;
-            }
-            BlockType type;
-            if (worldY < BEDROCK_MAX) {
-              type = BlockType::Bedrock;
-            } else if (worldY == iHeight) {
-              type = GetSurfaceBlock(biome, worldY, iHeight);
-            } else if (worldY > iHeight - DIRT_DEPTH) {
-              type = BlockType::Dirt;
-            } else {
-              type = BlockType::Stone;
-            }
-            chunk.SetBlock(x, y, z, {type});
-          }
+
+        // Cave culling (заглушка, будущая фича)
+        if (HasCaveAt(worldX, static_cast<float>(worldY), worldZ)) {
+          // оставляем Air
+          continue;
         }
+
+        BlockType type;
+
+        if (worldY < BEDROCK_MAX) {
+          type = BlockType::Bedrock;
+        } else if (worldY == iHeight) {
+          // Поверхностный блок — определяется биомом и высотой
+          type = GetSurfaceBlock(def, worldY, iHeight);
+        } else if (worldY > iHeight - def.subSurfaceDepth) {
+          // Подповерхностный слой (dirt, sand и т.д.)
+          type = def.subSurfaceBlock;
+        } else {
+          type = BlockType::Stone;
+        }
+
+        chunk.SetBlock(x, y, z, {type});
       }
-
-      columns[x][z] = {iHeight, biome};
     }
   }
 
-  // --- Tree Decoration Pass (Neighbor-Aware) ---
+  // ==========================================================================
+  // PASS 2 — DECORATION (Neighbor-Aware Trees)
+  //
+  // Best Practice: сканируем регион больше чанка на TREE_SCAN_MARGIN
+  // с каждой стороны. Деревья из соседних чанков могут иметь ветви
+  // и листья, которые физически попадают в ЭТОТ чанк.
+  //
+  // Для внутренних позиций — кэш из Pass 1 (нет повторных шумовых вызовов).
+  // Для внешних позиций — HeightmapSampler::Sample() (потокобезопасен).
+  // ==========================================================================
 
-  // Best Practice: scan BEYOND chunk borders so neighboring trees'
-  // canopies extend into this chunk seamlessly. No more grid gaps!
-  constexpr int SCAN_MARGIN = 6; // Max canopy radius = 5, + 1 safety
-  int chunkWorldX = chunkPos.x * Chunk::SIZE;
-  int chunkWorldZ = chunkPos.z * Chunk::SIZE;
+  for (int sx = -TREE_SCAN_MARGIN; sx < Chunk::SIZE + TREE_SCAN_MARGIN; ++sx) {
+    for (int sz = -TREE_SCAN_MARGIN; sz < Chunk::SIZE + TREE_SCAN_MARGIN;
+         ++sz) {
 
-  for (int sx = -SCAN_MARGIN; sx < Chunk::SIZE + SCAN_MARGIN; sx++) {
-    for (int sz = -SCAN_MARGIN; sz < Chunk::SIZE + SCAN_MARGIN; sz++) {
-      int worldX = chunkWorldX + sx;
-      int worldZ = chunkWorldZ + sz;
+      const int wx = chunkWorldX + sx;
+      const int wz = chunkWorldZ + sz;
 
-      // Get terrain height at this world position
-      // For positions outside chunk, we need to recalculate
-      int terrainHeight;
-      BiomeType biome;
+      // Берём ColumnSample: из кэша (быстро) или пересчитываем (снаружи чанка)
+      ColumnSample sample;
       if (sx >= 0 && sx < Chunk::SIZE && sz >= 0 && sz < Chunk::SIZE) {
-        terrainHeight = columns[sx][sz].height;
-        biome = columns[sx][sz].biome;
+        sample = columns[sx][sz];
       } else {
-        // Recalculate for out-of-chunk positions
-        float fx = static_cast<float>(worldX);
-        float fz = static_cast<float>(worldZ);
-        float temp = temperatureNoise.GetNoise(fx, fz);
-        float hum = humidityNoise.GetNoise(fx, fz);
-        biome = GetBiome(temp, hum);
-        float bv = baseNoise.GetNoise(fx, fz);
-        float dv = detailNoise.GetNoise(fx, fz);
-        float wxv = warpNoise.GetNoise(fx, fz) * 80.0f;
-        float wzv = warpNoise.GetNoise(fx + 1234.5f, fz + 6789.0f) * 80.0f;
-        float mv = (mountainNoise.GetNoise(fx + wxv, fz + wzv) + 1.0f) * 0.5f;
-        terrainHeight =
-            static_cast<int>(GetTerrainHeightBlended(bv, dv, mv, temp, hum));
+        sample =
+            m_Sampler.Sample(static_cast<float>(wx), static_cast<float>(wz));
       }
 
-      if (!ShouldPlaceTree(worldX, worldZ, biome))
+      const BiomeDefinition &def = GetBiomeDef(sample.biome);
+
+      if (!ShouldPlaceTree(wx, wz, def))
         continue;
 
-      // Generate tree blueprint
-      auto treeBlocks = OakTreeGenerator::Generate(worldX, worldZ, m_Seed);
+      // Генерируем блупринт дерева (детерминированно по мировым координатам)
+      const auto treeBlocks = OakTreeGenerator::Generate(wx, wz, m_Seed);
+      const int treeBaseY = static_cast<int>(sample.height) + 1;
 
-      // Place blocks that fall within THIS chunk
+      // Размещаем блоки дерева, попадающие в границы ЭТОГО чанка
       for (const auto &tb : treeBlocks) {
-        int bx = sx + tb.dx;
-        int by = (terrainHeight + 1 + tb.dy) - chunkBottomY;
-        int bz = sz + tb.dz;
+        const int bx = sx + tb.dx;
+        const int by = (treeBaseY + tb.dy) - chunkBottomY;
+        const int bz = sz + tb.dz;
 
-        if (Chunk::IsValid(bx, by, bz)) {
-          Block existing = chunk.GetBlock(bx, by, bz);
-          if (existing.type == BlockType::Air ||
-              (tb.type == BlockType::Wood &&
-               existing.type == BlockType::Leaves)) {
-            chunk.SetBlock(bx, by, bz, {tb.type});
-          }
+        if (!Chunk::IsValid(bx, by, bz))
+          continue;
+
+        // Правило приоритета: Wood перезаписывает Leaves, Air не трогает ничего
+        const Block existing = chunk.GetBlock(bx, by, bz);
+        if (existing.IsAir() || (tb.type == BlockType::Wood &&
+                                 existing.type == BlockType::Leaves)) {
+          chunk.SetBlock(bx, by, bz, {tb.type});
         }
       }
     }
@@ -492,34 +264,35 @@ void AdvancedTerrainGenerator::Generate(Chunk &chunk) const {
 }
 
 // ============================================================================
-// Legacy Wave Generator
+// WaveTerrainGenerator — простой синусоидальный рельеф для smoke-тестов.
 // ============================================================================
 
 void WaveTerrainGenerator::Generate(Chunk &chunk) const {
   const glm::ivec3 chunkPos = chunk.GetPosition();
+  const int worldYBase = chunkPos.y * Chunk::SIZE;
 
-  for (int x = 0; x < Chunk::SIZE; x++) {
-    for (int z = 0; z < Chunk::SIZE; z++) {
-      float worldX = static_cast<float>(chunkPos.x * Chunk::SIZE + x);
-      float worldZ = static_cast<float>(chunkPos.z * Chunk::SIZE + z);
+  for (int x = 0; x < Chunk::SIZE; ++x) {
+    for (int z = 0; z < Chunk::SIZE; ++z) {
+      const float fx = static_cast<float>(chunkPos.x * Chunk::SIZE + x);
+      const float fz = static_cast<float>(chunkPos.z * Chunk::SIZE + z);
 
-      int height = static_cast<int>(32.0f + 10.0f * std::sin(worldX * 0.1f) *
-                                                std::cos(worldZ * 0.1f));
-      int worldYBase = chunkPos.y * Chunk::SIZE;
+      const int height = static_cast<int>(32.0f + 10.0f * std::sin(fx * 0.1f) *
+                                                      std::cos(fz * 0.1f));
 
-      for (int y = 0; y < Chunk::SIZE; y++) {
-        int worldY = worldYBase + y;
+      for (int y = 0; y < Chunk::SIZE; ++y) {
+        const int worldY = worldYBase + y;
 
-        if (worldY < height) {
-          BlockType type = BlockType::Stone;
-          if (worldY == height - 1)
-            type = BlockType::Grass;
-          else if (worldY > height - 4)
-            type = BlockType::Dirt;
+        BlockType type = BlockType::Air;
+        if (worldY < height - 3) {
+          type = BlockType::Stone;
+        } else if (worldY < height) {
+          type = BlockType::Dirt;
+        } else if (worldY == height) {
+          type = BlockType::Grass;
+        }
 
+        if (type != BlockType::Air) {
           chunk.SetBlock(x, y, z, {type});
-        } else {
-          chunk.SetBlock(x, y, z, {BlockType::Air});
         }
       }
     }

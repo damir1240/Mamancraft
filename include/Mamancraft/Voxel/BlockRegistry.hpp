@@ -34,6 +34,7 @@ public:
     if (auto it = m_Registry.find(type); it != m_Registry.end()) {
       return it->second;
     }
+    // Unknown block → magenta debug texture (визуально заметно в игре)
     static const BlockInfo unknown = {{1.0f, 0.0f, 1.0f},
                                       false,
                                       "mc:textures/block/debug.png",
@@ -94,16 +95,34 @@ private:
           "mc:textures/block/bedrock.png"}},
 
         // ── Water ──────────────────────────────────────────────────────────
-        // Transparent, animated (16 frames × 16px in a 16×256 vertical strip).
-        // The shader uses time + animFrames to cycle through the frames.
+        // Transparent, animated (16 frames × 16px в вертикальной полосе).
+        // Шейдер использует time + animFrames для цикла анимации.
         {BlockType::Water,
          {{0.4f, 0.6f, 1.0f}, // tint color (medium blue)
-          true,               // transparent: render blocks below water
+          true,               // transparent: блоки под водой рендерятся
           "mc:textures/block/water_cauldron.png",
           "mc:textures/block/water_cauldron.png",
           "mc:textures/block/water_cauldron.png",
           /* isAnimated */ true,
           /* animFrames */ 16}},
+
+        // ── Sand ───────────────────────────────────────────────────────────
+        // Береговая зона, дельты рек, пустынный биом.
+        {BlockType::Sand,
+         {{1.0f, 1.0f, 1.0f},
+          false,
+          "mc:textures/block/sand.png",
+          "mc:textures/block/sand.png",
+          "mc:textures/block/sand.png"}},
+
+        // ── Gravel ─────────────────────────────────────────────────────────
+        // Русло рек, дно водоёмов, горные осыпи.
+        {BlockType::Gravel,
+         {{1.0f, 1.0f, 1.0f},
+          false,
+          "mc:textures/block/gravel.png",
+          "mc:textures/block/gravel.png",
+          "mc:textures/block/gravel.png"}},
     };
   }
 
