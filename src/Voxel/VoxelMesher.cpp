@@ -57,14 +57,22 @@ VulkanMesh::Builder VoxelMesher::GenerateMesh(const Chunk &chunk) {
 
           bool isVisible = false;
           if (neighborP[axis] < 0 || neighborP[axis] >= Chunk::SIZE) {
-            isVisible = true; // For now, treat boundaries as visible (later
-                              // check neighboring chunks)
+            isVisible = true;
           } else {
             Block neighbor =
                 chunk.GetBlock(neighborP.x, neighborP.y, neighborP.z);
-            if (neighbor.type == BlockType::Air ||
-                registry.GetInfo(neighbor.type).isTransparent) {
+            if (neighbor.type == BlockType::Air) {
               isVisible = true;
+            } else if (block.type == BlockType::Water &&
+                       neighbor.type == BlockType::Water) {
+              // Never render shared face between two water blocks
+              isVisible = false;
+            } else if (!block.IsOpaque() ||
+                       registry.GetInfo(neighbor.type).isTransparent) {
+              // Transparent block next to another transparent or solid is
+              // visible only if neighbor is air (handled above) — except leaves
+              // vs solid
+              isVisible = !neighbor.IsSolid();
             }
           }
 
@@ -73,6 +81,7 @@ VulkanMesh::Builder VoxelMesher::GenerateMesh(const Chunk &chunk) {
             VoxelMesher::FaceData data;
             data.active = true;
             data.color = info.color;
+            data.animFrames = info.animFrames;
             if (face == Face::Top)
               data.texIndex = info.texIndexTop;
             else if (face == Face::Bottom)
@@ -82,7 +91,7 @@ VulkanMesh::Builder VoxelMesher::GenerateMesh(const Chunk &chunk) {
 
             mask[j * Chunk::SIZE + k] = data;
           } else {
-            mask[j * Chunk::SIZE + k] = {0, {0, 0, 0}, false};
+            mask[j * Chunk::SIZE + k] = {0, 1, {0, 0, 0}, false};
           }
         }
       }
@@ -211,10 +220,14 @@ void VoxelMesher::AddGreedyFace(VulkanMesh::Builder &builder,
     uv4 = {0.0f, 0.0f};                  // j=0, k=w
   }
 
-  builder.vertices.push_back({bp + v1, data.color, uv1, data.texIndex});
-  builder.vertices.push_back({bp + v2, data.color, uv2, data.texIndex});
-  builder.vertices.push_back({bp + v3, data.color, uv3, data.texIndex});
-  builder.vertices.push_back({bp + v4, data.color, uv4, data.texIndex});
+  builder.vertices.push_back(
+      {bp + v1, data.color, uv1, data.texIndex, data.animFrames});
+  builder.vertices.push_back(
+      {bp + v2, data.color, uv2, data.texIndex, data.animFrames});
+  builder.vertices.push_back(
+      {bp + v3, data.color, uv3, data.texIndex, data.animFrames});
+  builder.vertices.push_back(
+      {bp + v4, data.color, uv4, data.texIndex, data.animFrames});
 
   // Winding order: front-face CCW when viewed from outside
   if ((axis == 1 && direction > 0) || (axis == 0 && direction < 0) ||

@@ -2,6 +2,8 @@
 
 #include "Mamancraft/Voxel/Biome.hpp"
 #include "Mamancraft/Voxel/Chunk.hpp"
+#include "Mamancraft/Voxel/RiverGenerator.hpp"
+#include <memory>
 
 namespace mc {
 
@@ -33,18 +35,19 @@ public:
 
 private:
   uint32_t m_Seed;
+  std::unique_ptr<RiverGenerator> m_RiverGen;
 
   // Biome selection based on temperature/humidity noise
   BiomeType GetBiome(float temperature, float humidity) const;
 
-  // Height calculation considering biome influence (legacy, single-biome)
-  float GetTerrainHeight(float baseVal, float detailVal, float mountainVal,
-                         BiomeType biome) const;
-
-  // Height calculation with smooth blending between all biomes (preferred)
+  // Height calculation (all biome-blended, preferred)
   float GetTerrainHeightBlended(float baseVal, float detailVal,
                                 float mountainVal, float temperature,
                                 float humidity) const;
+
+  // Legacy single-biome height stub (kept for reference)
+  float GetTerrainHeight(float baseVal, float detailVal, float mountainVal,
+                         BiomeType biome) const;
 
   // Surface block based on biome and height
   BlockType GetSurfaceBlock(BiomeType biome, int worldY,

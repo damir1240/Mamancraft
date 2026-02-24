@@ -7,7 +7,8 @@
 namespace mc {
 
 AdvancedTerrainGenerator::AdvancedTerrainGenerator(uint32_t seed)
-    : m_Seed(seed) {}
+    : m_Seed(seed),
+      m_RiverGen(std::make_unique<RiverGenerator>(seed ^ 0xDEADBEEF)) {}
 
 // ============================================================================
 // Biome Selection (Whittaker-style temperature/humidity classification)
@@ -340,7 +341,44 @@ void AdvancedTerrainGenerator::Generate(Chunk &chunk) const {
     }
   }
 
+  // --- River Pass ---
+  // RiverGenerator is O(1) per column (noise threshold).
+  // For river columns: carve a trench and fill with water.
+  for (int x = 0; x < Chunk::SIZE; x++) {
+    for (int z = 0; z < Chunk::SIZE; z++) {
+      int iWX = chunkPos.x * Chunk::SIZE + x;
+      int iWZ = chunkPos.z * Chunk::SIZE + z;
+      int terrainH = columns[x][z].height;
+
+      int waterSurfaceY = 0, riverDepth = 0;
+      if (!m_RiverGen->IsRiverAt(iWX, iWZ, terrainH, waterSurfaceY, riverDepth))
+        continue;
+
+      int bedY = waterSurfaceY - riverDepth; // bottom of river bed
+      int surfY = waterSurfaceY;             // water surface
+
+      for (int y = 0; y < Chunk::SIZE; y++) {
+        int worldY = chunkBottomY + y;
+
+        if (worldY > surfY && worldY <= terrainH) {
+          // Carve: remove terrain above water surface to form the trench
+          chunk.SetBlock(x, y, z, {BlockType::Air});
+        } else if (worldY >= bedY && worldY <= surfY) {
+          if (worldY <= bedY + 1) {
+            chunk.SetBlock(x, y, z, {BlockType::Stone}); // river bed
+          } else {
+            chunk.SetBlock(x, y, z, {BlockType::Water}); // water body
+          }
+        }
+      }
+
+      // Suppress trees over rivers
+      columns[x][z].biome = BiomeType::Plains;
+    }
+  }
+
   // --- Tree Decoration Pass (Neighbor-Aware) ---
+
   // Best Practice: scan BEYOND chunk borders so neighboring trees'
   // canopies extend into this chunk seamlessly. No more grid gaps!
   constexpr int SCAN_MARGIN = 6; // Max canopy radius = 5, + 1 safety

@@ -11,6 +11,7 @@ struct Vertex {
   glm::vec3 color;
   glm::vec2 uv;
   uint32_t textureIndex;
+  uint32_t animFrames; // 1 = static, N>1 = animated strip with N frames
 
   static vk::VertexInputBindingDescription GetBindingDescription() {
     vk::VertexInputBindingDescription bindingDescription;
@@ -20,9 +21,9 @@ struct Vertex {
     return bindingDescription;
   }
 
-  static std::array<vk::VertexInputAttributeDescription, 4>
+  static std::array<vk::VertexInputAttributeDescription, 5>
   GetAttributeDescriptions() {
-    std::array<vk::VertexInputAttributeDescription, 4> attributeDescriptions;
+    std::array<vk::VertexInputAttributeDescription, 5> attributeDescriptions;
 
     attributeDescriptions[0].binding = 0;
     attributeDescriptions[0].location = 0;
@@ -43,6 +44,11 @@ struct Vertex {
     attributeDescriptions[3].location = 3;
     attributeDescriptions[3].format = vk::Format::eR32Uint;
     attributeDescriptions[3].offset = offsetof(Vertex, textureIndex);
+
+    attributeDescriptions[4].binding = 0;
+    attributeDescriptions[4].location = 4;
+    attributeDescriptions[4].format = vk::Format::eR32Uint;
+    attributeDescriptions[4].offset = offsetof(Vertex, animFrames);
 
     return attributeDescriptions;
   }

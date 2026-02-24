@@ -20,12 +20,13 @@ private:
 
   struct FaceData {
     uint32_t texIndex;
+    uint32_t animFrames = 1; // 1=static, N>1=animated
     glm::vec3 color;
     bool active = false;
 
     bool operator==(const FaceData &other) const {
       return active == other.active && texIndex == other.texIndex &&
-             color == other.color;
+             animFrames == other.animFrames && color == other.color;
     }
   };
 

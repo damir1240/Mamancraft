@@ -282,6 +282,7 @@ void Application::Update(float dt) {
 void Application::Run() {
   MC_INFO("Starting main loop.");
   auto lastTime = std::chrono::high_resolution_clock::now();
+  float totalTime = 0.0f; // accumulated elapsed time (for shader animation)
 
   while (m_IsRunning) {
     auto currentTime = std::chrono::high_resolution_clock::now();
@@ -289,6 +290,7 @@ void Application::Run() {
                    currentTime - lastTime)
                    .count();
     lastTime = currentTime;
+    totalTime += dt;
 
     m_InputManager->NewFrame();
     ProcessEvents();
@@ -298,6 +300,7 @@ void Application::Run() {
       GlobalUbo ubo{};
       ubo.projection = m_Camera.GetProjection();
       ubo.view = m_Camera.GetView();
+      ubo.time = totalTime; // drives animated water frames
       m_Renderer->UpdateGlobalUbo(ubo);
 
       m_Renderer->BeginRenderPass(commandBuffer);
