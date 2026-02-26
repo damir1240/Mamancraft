@@ -14,6 +14,9 @@ struct GlobalUbo {
   float _pad2{0.0f};
 };
 
+// PushConstantData is no longer used in GPU-Driven paradigm.
+// Per-object transforms are stored in ObjectData SSBO (see GPUStructures.hpp).
+// This struct is retained for backward compatibility with tests.
 struct PushConstantData {
   glm::mat4 model{1.0f};
 };

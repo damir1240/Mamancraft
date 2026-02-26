@@ -1,0 +1,81 @@
+#version 460
+layout(local_size_x = 64) in;
+
+// -------------------------------------------------------------------
+// GPU Frustum Culling Compute Shader
+//
+// For each draw command, tests its AABB against 6 frustum planes.
+// If invisible, sets instanceCount = 0 (culled by vkCmdDrawIndexedIndirect).
+// -------------------------------------------------------------------
+
+struct DrawCommand {
+    uint indexCount;
+    uint instanceCount;
+    uint firstIndex;
+    int  vertexOffset;
+    uint firstInstance;
+};
+
+struct ObjectData {
+    mat4 model;
+    vec4 aabbMin;
+    vec4 aabbMax;
+};
+
+layout(set = 0, binding = 0) uniform CullUniforms {
+    mat4 viewProj;
+    vec4 frustumPlanes[6];
+    uint drawCount;
+    uint _pad0;
+    uint _pad1;
+    uint _pad2;
+} cull;
+
+layout(std430, set = 0, binding = 1) buffer DrawCommandBuffer {
+    DrawCommand commands[];
+};
+
+layout(std430, set = 0, binding = 2) readonly buffer ObjectDataBuffer {
+    ObjectData objects[];
+};
+
+/// Test AABB against 6 frustum planes (world-space).
+/// Returns true if the AABB is at least partially inside the frustum.
+bool isAABBVisible(vec3 aabbMin, vec3 aabbMax) {
+    for (int i = 0; i < 6; i++) {
+        vec4 plane = cull.frustumPlanes[i];
+
+        // Select the positive vertex (the corner most aligned with the plane normal)
+        vec3 pVertex = vec3(
+            plane.x > 0.0 ? aabbMax.x : aabbMin.x,
+            plane.y > 0.0 ? aabbMax.y : aabbMin.y,
+            plane.z > 0.0 ? aabbMax.z : aabbMin.z
+        );
+
+        // If the positive vertex is behind the plane, the AABB is fully outside
+        if (dot(plane.xyz, pVertex) + plane.w < 0.0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= cull.drawCount) return;
+
+    // Skip already-culled draws (indexCount == 0 means removed chunk)
+    if (commands[idx].indexCount == 0) {
+        commands[idx].instanceCount = 0;
+        return;
+    }
+
+    vec3 aabbMin = objects[idx].aabbMin.xyz;
+    vec3 aabbMax = objects[idx].aabbMax.xyz;
+
+    if (isAABBVisible(aabbMin, aabbMax)) {
+        commands[idx].instanceCount = 1;
+    } else {
+        commands[idx].instanceCount = 0;
+    }
+}

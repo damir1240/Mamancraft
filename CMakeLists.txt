@@ -37,7 +37,7 @@ if(NOT GLSLC_EXECUTABLE)
     message(FATAL_ERROR "glslc not found! Please check VULKAN_SDK installation.")
 endif()
 
-file(GLOB_RECURSE SHADERS "assets/base/assets/mc/shaders/*.vert" "assets/base/assets/mc/shaders/*.frag")
+file(GLOB_RECURSE SHADERS "assets/base/assets/mc/shaders/*.vert" "assets/base/assets/mc/shaders/*.frag" "assets/base/assets/mc/shaders/*.comp")
 set(SPV_FILES "")
 
 foreach(SHADER ${SHADERS})

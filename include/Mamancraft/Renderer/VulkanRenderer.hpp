@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Mamancraft/Renderer/GPUStructures.hpp"
+#include "Mamancraft/Renderer/IndirectDrawSystem.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanBuffer.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanFrameData.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanPipeline.hpp"
@@ -9,7 +11,8 @@
 
 namespace mc {
 
-class VulkanMesh;
+class VulkanTexture;
+class MaterialSystem;
 
 class VulkanRenderer {
 public:
@@ -27,11 +30,19 @@ public:
 
   void UpdateGlobalUbo(const GlobalUbo &ubo);
 
-  void DrawMesh(vk::CommandBuffer commandBuffer, VulkanPipeline &pipeline,
-                VulkanMesh &mesh, const PushConstantData &pushData);
+  /// GPU-Driven: Draw all visible chunks with a single indirect draw call.
+  void DrawIndirect(vk::CommandBuffer commandBuffer, VulkanPipeline &pipeline,
+                    const IndirectDrawSystem &drawSystem);
 
   // --- Bindless Texture Support ---
-  uint32_t RegisterTexture(const class VulkanTexture &texture);
+  uint32_t RegisterTexture(const VulkanTexture &texture);
+
+  /// Bind material SSBO to the descriptor set.
+  void BindMaterialBuffer(const MaterialSystem &materialSystem);
+
+  /// Bind object data SSBO to the descriptor set.
+  void BindObjectDataBuffer(vk::Buffer objectDataBuffer,
+                            vk::DeviceSize bufferSize);
 
   vk::DescriptorSetLayout GetGlobalDescriptorSetLayout() const {
     return m_GlobalDescriptorSetLayout;
