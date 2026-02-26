@@ -58,12 +58,12 @@ protected:
 TEST_F(VulkanPipelineTest, CreateShaderModule) {
   const char *basePath = SDL_GetBasePath();
   std::string shadersPath =
-      std::string(basePath ? basePath : "") + "assets/shaders/";
+      std::string(basePath ? basePath : "") + "assets/base/assets/mc/shaders/";
 
   // Test loading standard shaders
   EXPECT_NO_THROW({
     mc::VulkanShader vertShader(context->GetDevice(),
-                                shadersPath + "triangle.vert.spv");
+                                shadersPath + "voxel.vert.spv");
     EXPECT_NE(vertShader.GetShaderModule(), VK_NULL_HANDLE);
   });
 }
@@ -71,12 +71,12 @@ TEST_F(VulkanPipelineTest, CreateShaderModule) {
 TEST_F(VulkanPipelineTest, CreateVulkanPipeline) {
   const char *basePath = SDL_GetBasePath();
   std::string shadersPath =
-      std::string(basePath ? basePath : "") + "assets/shaders/";
+      std::string(basePath ? basePath : "") + "assets/base/assets/mc/shaders/";
 
   mc::VulkanShader vertShader(context->GetDevice(),
-                              shadersPath + "triangle.vert.spv");
+                              shadersPath + "voxel.vert.spv");
   mc::VulkanShader fragShader(context->GetDevice(),
-                              shadersPath + "triangle.frag.spv");
+                              shadersPath + "voxel.frag.spv");
 
   mc::VulkanRenderer renderer(*context);
 
@@ -85,13 +85,8 @@ TEST_F(VulkanPipelineTest, CreateVulkanPipeline) {
   configInfo.colorAttachmentFormat = context->GetSwapchain()->GetImageFormat();
   configInfo.depthAttachmentFormat = context->GetSwapchain()->GetDepthFormat();
 
-  configInfo.descriptorSetLayouts = {renderer.GetGlobalDescriptorSetLayout()};
-
-  vk::PushConstantRange pushConstantRange{};
-  pushConstantRange.stageFlags = vk::ShaderStageFlagBits::eVertex;
-  pushConstantRange.offset = 0;
-  pushConstantRange.size = sizeof(mc::PushConstantData);
-  configInfo.pushConstantRanges = {pushConstantRange};
+  configInfo.descriptorSetLayouts = {renderer.GetGlobalDescriptorSetLayout(),
+                                     renderer.GetBindlessDescriptorSetLayout()};
 
   EXPECT_NO_THROW({
     mc::VulkanPipeline pipeline(context->GetDevice(), vertShader, fragShader,
@@ -107,9 +102,9 @@ TEST_F(VulkanPipelineTest, CreateVulkanRenderer) {
 
 TEST_F(VulkanPipelineTest, CreateVulkanMesh) {
   mc::VulkanMesh::Builder builder;
-  builder.vertices = {{{0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
-                      {{0.5f, 0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}},
-                      {{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}}};
+  builder.vertices = {{{0.0f, -0.5f, 0.0f}, 0, {0.0f, 0.0f}},
+                      {{0.5f, 0.5f, 0.0f}, 0, {1.0f, 0.0f}},
+                      {{-0.5f, 0.5f, 0.0f}, 0, {0.0f, 1.0f}}};
   builder.indices = {0, 1, 2};
 
   EXPECT_NO_THROW({ mc::VulkanMesh mesh(*context, builder); });

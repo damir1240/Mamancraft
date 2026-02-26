@@ -21,6 +21,9 @@ struct BlockInfo {
   uint32_t texIndexTop = 0;
   uint32_t texIndexSide = 0;
   uint32_t texIndexBottom = 0;
+
+  // GPU-Driven: material index in MaterialSystem SSBO
+  uint32_t materialID = 0;
 };
 
 class BlockRegistry {

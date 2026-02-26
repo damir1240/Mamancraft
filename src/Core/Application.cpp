@@ -67,8 +67,8 @@ void Application::Init() {
   m_InputManager->SaveConfiguration(configPath);
 
   // Load resources via handles (Best Practice)
-  auto vertHandle = m_AssetManager->LoadShader("shaders/triangle.vert.spv");
-  auto fragHandle = m_AssetManager->LoadShader("shaders/triangle.frag.spv");
+  auto vertHandle = m_AssetManager->LoadShader("shaders/voxel.vert.spv");
+  auto fragHandle = m_AssetManager->LoadShader("shaders/voxel.frag.spv");
 
   auto vertShader = m_AssetManager->GetShader(vertHandle);
   auto fragShader = m_AssetManager->GetShader(fragHandle);
@@ -78,10 +78,12 @@ void Application::Init() {
     throw std::runtime_error("Required shaders failed to load");
   }
 
-  // --- Initialize Block Registry Textures ---
-  MC_INFO("Loading block textures...");
+  // --- Initialize Block Registry Textures & Materials ---
+  MC_INFO("Loading block textures and materials...");
   auto &registry = BlockRegistry::Instance();
   std::unordered_map<std::string, uint32_t> textureToIndex;
+
+  m_MaterialSystem = std::make_unique<MaterialSystem>(*m_VulkanContext);
 
   for (auto &[type, info] : registry.GetMutableRegistry()) {
     if (type == BlockType::Air)
@@ -107,7 +109,29 @@ void Application::Init() {
     registerTex(info.textureTop, info.texIndexTop);
     registerTex(info.textureSide, info.texIndexSide);
     registerTex(info.textureBottom, info.texIndexBottom);
+
+    // Register MaterialData for SSBO
+    MaterialData matData;
+    matData.albedoTexIndex = info.texIndexSide; // Default to side texture
+    if (info.textureSide.empty()) {
+      matData.albedoTexIndex = info.texIndexTop;
+    }
+    matData.animFrames = info.animFrames;
+    matData.albedoTint = glm::vec4(info.color, 1.0f);
+    matData.flags = info.isTransparent ? 1 : 0;
+
+    // FPS could be added to info later, default to 8.0f
+    matData.animFPS = 8.0f;
+
+    info.materialID = m_MaterialSystem->RegisterMaterial(matData);
   }
+
+  m_MaterialSystem->UploadToGPU();
+
+  // Initialize GPU-Driven Systems (VRAM: ~128MB Vertex, ~64MB Index buffer)
+  m_IndirectDrawSystem = std::make_unique<IndirectDrawSystem>(
+      *m_VulkanContext, 10000, 128 * 1024 * 1024, 64 * 1024 * 1024);
+  m_CullingSystem = std::make_unique<CullingSystem>(*m_VulkanContext);
 
   PipelineConfigInfo pipelineConfig;
   VulkanPipeline::DefaultPipelineConfigInfo(pipelineConfig);
@@ -119,12 +143,6 @@ void Application::Init() {
   pipelineConfig.descriptorSetLayouts = {
       m_Renderer->GetGlobalDescriptorSetLayout(),
       m_Renderer->GetBindlessDescriptorSetLayout()};
-
-  vk::PushConstantRange pushConstantRange{};
-  pushConstantRange.stageFlags = vk::ShaderStageFlagBits::eVertex;
-  pushConstantRange.offset = 0;
-  pushConstantRange.size = sizeof(PushConstantData);
-  pipelineConfig.pushConstantRanges = {pushConstantRange};
 
   m_Pipeline = std::make_unique<VulkanPipeline>(
       m_VulkanContext->GetDevice(), *vertShader, *fragShader, pipelineConfig);
@@ -166,6 +184,13 @@ void Application::Shutdown() {
   // Now safe to destroy World (no more background tasks running)
   if (m_World)
     m_World.reset();
+
+  if (m_CullingSystem)
+    m_CullingSystem.reset();
+  if (m_IndirectDrawSystem)
+    m_IndirectDrawSystem.reset();
+  if (m_MaterialSystem)
+    m_MaterialSystem.reset();
 
   if (m_Renderer)
     m_Renderer.reset();
@@ -270,20 +295,30 @@ void Application::Update(float dt) {
   // Process newly generated meshes (GPU Upload)
   auto pendingMeshes = m_World->GetPendingMeshes();
   for (auto &[coords, builder] : pendingMeshes) {
-    std::string meshName =
-        fmt::format("chunk_{}_{}_{}", coords.x, coords.y, coords.z);
+    if (m_ChunkDrawIDs.contains(coords)) {
+      m_IndirectDrawSystem->RemoveChunk(m_ChunkDrawIDs[coords]);
+      m_ChunkDrawIDs.erase(coords);
+    }
 
-    // Create or Update mesh
-    if (m_ChunkMeshes.contains(coords)) {
-      // Skip for now
-    } else {
-      if (builder.vertices.empty()) {
-        m_ChunkMeshes[coords] = 0; // Loaded but nothing to render
-      } else {
-        m_ChunkMeshes[coords] = m_AssetManager->CreateMesh(meshName, builder);
-      }
+    if (!builder.vertices.empty()) {
+      ObjectData objData;
+      // Vertices are already in world space, model matrix is identity
+      objData.model = glm::mat4(1.0f);
+
+      // AABB covers the chunk bounding box
+      glm::vec3 worldPos = glm::vec3(coords) * static_cast<float>(Chunk::SIZE);
+      objData.aabbMin = glm::vec4(worldPos, 1.0f);
+      objData.aabbMax =
+          glm::vec4(worldPos + static_cast<float>(Chunk::SIZE), 1.0f);
+
+      uint32_t drawID = m_IndirectDrawSystem->AddChunk(
+          builder.vertices, builder.indices, objData);
+      m_ChunkDrawIDs[coords] = drawID;
     }
   }
+
+  // Pre-frame flush of new CPU-side chunk allocations to GPU Mega Buffers
+  m_IndirectDrawSystem->FlushToGPU();
 }
 
 void Application::Run() {
@@ -310,17 +345,58 @@ void Application::Run() {
       ubo.time = totalTime; // drives animated water frames
       m_Renderer->UpdateGlobalUbo(ubo);
 
-      m_Renderer->BeginRenderPass(commandBuffer);
+      // Bind SSBOs to global descriptor sets
+      m_Renderer->BindMaterialBuffer(*m_MaterialSystem);
+      m_Renderer->BindObjectDataBuffer(
+          m_IndirectDrawSystem->GetObjectDataBuffer(),
+          m_IndirectDrawSystem->GetObjectDataBufferSize());
 
-      PushConstantData push{};
-      push.model = glm::mat4(1.0f);
+      // CPU: Mark all commands as visible (instanceCount = 1) and flush SSBOs
+      m_IndirectDrawSystem->ResetDrawCommands();
+      m_IndirectDrawSystem->FlushToGPU();
 
-      for (auto &[coords, handle] : m_ChunkMeshes) {
-        if (auto mesh = m_AssetManager->GetMesh(handle)) {
-          m_Renderer->DrawMesh(commandBuffer, *m_Pipeline, *mesh, push);
-        }
+      // GPU Compute Frustum Culling
+      CullUniforms cullUbo{};
+      cullUbo.viewProj = ubo.projection * ubo.view;
+
+      glm::mat4 vp = cullUbo.viewProj;
+      cullUbo.frustumPlanes[0] =
+          glm::vec4(vp[0][3] + vp[0][0], vp[1][3] + vp[1][0],
+                    vp[2][3] + vp[2][0], vp[3][3] + vp[3][0]); // Left
+      cullUbo.frustumPlanes[1] =
+          glm::vec4(vp[0][3] - vp[0][0], vp[1][3] - vp[1][0],
+                    vp[2][3] - vp[2][0], vp[3][3] - vp[3][0]); // Right
+      cullUbo.frustumPlanes[2] =
+          glm::vec4(vp[0][3] + vp[0][1], vp[1][3] + vp[1][1],
+                    vp[2][3] + vp[2][1], vp[3][3] + vp[3][1]); // Bottom
+      cullUbo.frustumPlanes[3] =
+          glm::vec4(vp[0][3] - vp[0][1], vp[1][3] - vp[1][1],
+                    vp[2][3] - vp[2][1], vp[3][3] - vp[3][1]); // Top
+      cullUbo.frustumPlanes[4] =
+          glm::vec4(vp[0][2], vp[1][2], vp[2][2], vp[3][2]); // Near
+      cullUbo.frustumPlanes[5] =
+          glm::vec4(vp[0][3] - vp[0][2], vp[1][3] - vp[1][2],
+                    vp[2][3] - vp[2][2], vp[3][3] - vp[3][2]); // Far
+
+      for (int i = 0; i < 6; i++) {
+        cullUbo.frustumPlanes[i] /=
+            glm::length(glm::vec3(cullUbo.frustumPlanes[i]));
       }
 
+      cullUbo.drawCount = m_IndirectDrawSystem->GetActiveDrawCount();
+
+      // Dispatch culling shader
+      m_CullingSystem->Execute(commandBuffer, cullUbo,
+                               m_IndirectDrawSystem->GetDrawCommandBuffer(),
+                               m_IndirectDrawSystem->GetDrawCommandBufferSize(),
+                               m_IndirectDrawSystem->GetObjectDataBuffer(),
+                               m_IndirectDrawSystem->GetObjectDataBufferSize(),
+                               m_IndirectDrawSystem->GetActiveDrawCount());
+
+      // GPU Indirect Draw
+      m_Renderer->BeginRenderPass(commandBuffer);
+      m_Renderer->DrawIndirect(commandBuffer, *m_Pipeline,
+                               *m_IndirectDrawSystem);
       m_Renderer->EndRenderPass(commandBuffer);
       m_Renderer->EndFrame();
     }

@@ -1,7 +1,7 @@
 #include "Mamancraft/Renderer/VulkanRenderer.hpp"
 #include "Mamancraft/Core/Logger.hpp"
+#include "Mamancraft/Renderer/MaterialSystem.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanCommandPool.hpp"
-#include "Mamancraft/Renderer/Vulkan/VulkanMesh.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanTexture.hpp"
 
 #include <stdexcept>
@@ -95,17 +95,32 @@ void VulkanRenderer::CreateSyncObjects() {
 void VulkanRenderer::CreateDescriptors() {
   vk::Device device = m_Context.GetDevice()->GetLogicalDevice();
 
-  // --- Set 0: Global UBO ---
-  vk::DescriptorSetLayoutBinding uboLayoutBinding{};
-  uboLayoutBinding.binding = 0;
-  uboLayoutBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
-  uboLayoutBinding.descriptorCount = 1;
-  uboLayoutBinding.stageFlags =
+  // --- Set 0: Global UBO (binding 0) + ObjectData SSBO (binding 1) +
+  //            MaterialData SSBO (binding 2) ---
+  std::array<vk::DescriptorSetLayoutBinding, 3> globalBindings{};
+
+  // binding 0: GlobalUbo (UBO)
+  globalBindings[0].binding = 0;
+  globalBindings[0].descriptorType = vk::DescriptorType::eUniformBuffer;
+  globalBindings[0].descriptorCount = 1;
+  globalBindings[0].stageFlags =
       vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
 
+  // binding 1: ObjectData SSBO (vertex shader)
+  globalBindings[1].binding = 1;
+  globalBindings[1].descriptorType = vk::DescriptorType::eStorageBuffer;
+  globalBindings[1].descriptorCount = 1;
+  globalBindings[1].stageFlags = vk::ShaderStageFlagBits::eVertex;
+
+  // binding 2: MaterialData SSBO (fragment shader)
+  globalBindings[2].binding = 2;
+  globalBindings[2].descriptorType = vk::DescriptorType::eStorageBuffer;
+  globalBindings[2].descriptorCount = 1;
+  globalBindings[2].stageFlags = vk::ShaderStageFlagBits::eFragment;
+
   vk::DescriptorSetLayoutCreateInfo globalLayoutInfo{};
-  globalLayoutInfo.bindingCount = 1;
-  globalLayoutInfo.pBindings = &uboLayoutBinding;
+  globalLayoutInfo.bindingCount = static_cast<uint32_t>(globalBindings.size());
+  globalLayoutInfo.pBindings = globalBindings.data();
 
   m_GlobalDescriptorSetLayout =
       device.createDescriptorSetLayout(globalLayoutInfo);
@@ -139,6 +154,9 @@ void VulkanRenderer::CreateDescriptors() {
   std::vector<vk::DescriptorPoolSize> poolSizes = {
       {vk::DescriptorType::eUniformBuffer,
        static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT)},
+      {vk::DescriptorType::eStorageBuffer,
+       static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT) *
+           2}, // ObjectData + MaterialData
       {vk::DescriptorType::eCombinedImageSampler, MAX_BINDLESS_RESOURCES}};
 
   vk::DescriptorPoolCreateInfo poolInfo{};
@@ -150,7 +168,6 @@ void VulkanRenderer::CreateDescriptors() {
   m_DescriptorPool = device.createDescriptorPool(poolInfo);
 
   // --- Allocate Bindless Set ---
-  // For variable descriptor count, we use pNext chain in allocation
   uint32_t variableDescriptorCount = MAX_BINDLESS_RESOURCES;
   vk::DescriptorSetVariableDescriptorCountAllocateInfo
       variableDescriptorCountAllocInfo{};
@@ -188,7 +205,6 @@ void VulkanRenderer::CreateUboBuffers() {
   allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
   allocInfo.pSetLayouts = layouts.data();
 
-  // Handle Vulkan-HPP result value or direct vector
   m_GlobalDescriptorSets =
       m_Context.GetDevice()->GetLogicalDevice().allocateDescriptorSets(
           allocInfo);
@@ -233,6 +249,49 @@ uint32_t VulkanRenderer::RegisterTexture(const VulkanTexture &texture) {
       1, &descriptorWrite, 0, nullptr);
 
   return index;
+}
+
+void VulkanRenderer::BindMaterialBuffer(const MaterialSystem &materialSystem) {
+  vk::DescriptorBufferInfo matInfo = materialSystem.GetDescriptorInfo();
+
+  for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    vk::WriteDescriptorSet write{};
+    write.dstSet = m_GlobalDescriptorSets[i];
+    write.dstBinding = 2;
+    write.dstArrayElement = 0;
+    write.descriptorType = vk::DescriptorType::eStorageBuffer;
+    write.descriptorCount = 1;
+    write.pBufferInfo = &matInfo;
+
+    m_Context.GetDevice()->GetLogicalDevice().updateDescriptorSets(1, &write, 0,
+                                                                   nullptr);
+  }
+
+  MC_INFO("VulkanRenderer: Material SSBO bound to descriptor set (binding 2)");
+}
+
+void VulkanRenderer::BindObjectDataBuffer(vk::Buffer objectDataBuffer,
+                                          vk::DeviceSize bufferSize) {
+  vk::DescriptorBufferInfo objInfo{};
+  objInfo.buffer = objectDataBuffer;
+  objInfo.offset = 0;
+  objInfo.range = bufferSize;
+
+  for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    vk::WriteDescriptorSet write{};
+    write.dstSet = m_GlobalDescriptorSets[i];
+    write.dstBinding = 1;
+    write.dstArrayElement = 0;
+    write.descriptorType = vk::DescriptorType::eStorageBuffer;
+    write.descriptorCount = 1;
+    write.pBufferInfo = &objInfo;
+
+    m_Context.GetDevice()->GetLogicalDevice().updateDescriptorSets(1, &write, 0,
+                                                                   nullptr);
+  }
+
+  MC_INFO(
+      "VulkanRenderer: ObjectData SSBO bound to descriptor set (binding 1)");
 }
 
 void VulkanRenderer::UpdateGlobalUbo(const GlobalUbo &ubo) {
@@ -381,8 +440,13 @@ void VulkanRenderer::BeginRenderPass(vk::CommandBuffer commandBuffer) {
   renderingInfo.pColorAttachments = &colorAttachment;
   renderingInfo.pDepthAttachment = &depthAttachment;
 
-  // Image layout transitions
-  vk::ImageMemoryBarrier colorBarrier;
+  // Image layout transitions via Synchronization2
+  vk::ImageMemoryBarrier2 colorBarrier{};
+  colorBarrier.srcStageMask = vk::PipelineStageFlagBits2::eTopOfPipe;
+  colorBarrier.srcAccessMask = vk::AccessFlagBits2::eNone;
+  colorBarrier.dstStageMask =
+      vk::PipelineStageFlagBits2::eColorAttachmentOutput;
+  colorBarrier.dstAccessMask = vk::AccessFlagBits2::eColorAttachmentWrite;
   colorBarrier.oldLayout = vk::ImageLayout::eUndefined;
   colorBarrier.newLayout = vk::ImageLayout::eColorAttachmentOptimal;
   colorBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -394,10 +458,13 @@ void VulkanRenderer::BeginRenderPass(vk::CommandBuffer commandBuffer) {
   colorBarrier.subresourceRange.levelCount = 1;
   colorBarrier.subresourceRange.baseArrayLayer = 0;
   colorBarrier.subresourceRange.layerCount = 1;
-  colorBarrier.srcAccessMask = vk::AccessFlags{};
-  colorBarrier.dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
 
-  vk::ImageMemoryBarrier depthBarrier;
+  vk::ImageMemoryBarrier2 depthBarrier{};
+  depthBarrier.srcStageMask = vk::PipelineStageFlagBits2::eTopOfPipe;
+  depthBarrier.srcAccessMask = vk::AccessFlagBits2::eNone;
+  depthBarrier.dstStageMask = vk::PipelineStageFlagBits2::eEarlyFragmentTests;
+  depthBarrier.dstAccessMask =
+      vk::AccessFlagBits2::eDepthStencilAttachmentWrite;
   depthBarrier.oldLayout = vk::ImageLayout::eUndefined;
   depthBarrier.newLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
   depthBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -408,16 +475,14 @@ void VulkanRenderer::BeginRenderPass(vk::CommandBuffer commandBuffer) {
   depthBarrier.subresourceRange.levelCount = 1;
   depthBarrier.subresourceRange.baseArrayLayer = 0;
   depthBarrier.subresourceRange.layerCount = 1;
-  depthBarrier.srcAccessMask = vk::AccessFlags{};
-  depthBarrier.dstAccessMask = vk::AccessFlagBits::eDepthStencilAttachmentWrite;
 
-  vk::ImageMemoryBarrier barriers[] = {colorBarrier, depthBarrier};
+  std::array<vk::ImageMemoryBarrier2, 2> barriers = {colorBarrier,
+                                                     depthBarrier};
+  vk::DependencyInfo depInfo{};
+  depInfo.imageMemoryBarrierCount = static_cast<uint32_t>(barriers.size());
+  depInfo.pImageMemoryBarriers = barriers.data();
 
-  commandBuffer.pipelineBarrier(
-      vk::PipelineStageFlagBits::eTopOfPipe,
-      vk::PipelineStageFlagBits::eColorAttachmentOutput |
-          vk::PipelineStageFlagBits::eEarlyFragmentTests,
-      vk::DependencyFlags{}, nullptr, nullptr, barriers);
+  commandBuffer.pipelineBarrier2(depInfo);
 
   commandBuffer.beginRendering(renderingInfo);
 
@@ -441,7 +506,12 @@ void VulkanRenderer::BeginRenderPass(vk::CommandBuffer commandBuffer) {
 void VulkanRenderer::EndRenderPass(vk::CommandBuffer commandBuffer) {
   commandBuffer.endRendering();
 
-  vk::ImageMemoryBarrier barrier;
+  // Transition color attachment to present layout via Synchronization2
+  vk::ImageMemoryBarrier2 barrier{};
+  barrier.srcStageMask = vk::PipelineStageFlagBits2::eColorAttachmentOutput;
+  barrier.srcAccessMask = vk::AccessFlagBits2::eColorAttachmentWrite;
+  barrier.dstStageMask = vk::PipelineStageFlagBits2::eBottomOfPipe;
+  barrier.dstAccessMask = vk::AccessFlagBits2::eNone;
   barrier.oldLayout = vk::ImageLayout::eColorAttachmentOptimal;
   barrier.newLayout = vk::ImageLayout::ePresentSrcKHR;
   barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -452,18 +522,22 @@ void VulkanRenderer::EndRenderPass(vk::CommandBuffer commandBuffer) {
   barrier.subresourceRange.levelCount = 1;
   barrier.subresourceRange.baseArrayLayer = 0;
   barrier.subresourceRange.layerCount = 1;
-  barrier.srcAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
-  barrier.dstAccessMask = vk::AccessFlags{};
 
-  commandBuffer.pipelineBarrier(
-      vk::PipelineStageFlagBits::eColorAttachmentOutput,
-      vk::PipelineStageFlagBits::eBottomOfPipe, vk::DependencyFlags{}, nullptr,
-      nullptr, barrier);
+  vk::DependencyInfo depInfo{};
+  depInfo.imageMemoryBarrierCount = 1;
+  depInfo.pImageMemoryBarriers = &barrier;
+
+  commandBuffer.pipelineBarrier2(depInfo);
 }
 
-void VulkanRenderer::DrawMesh(vk::CommandBuffer commandBuffer,
-                              VulkanPipeline &pipeline, VulkanMesh &mesh,
-                              const PushConstantData &pushData) {
+void VulkanRenderer::DrawIndirect(vk::CommandBuffer commandBuffer,
+                                  VulkanPipeline &pipeline,
+                                  const IndirectDrawSystem &drawSystem) {
+  uint32_t drawCount = drawSystem.GetActiveDrawCount();
+  if (drawCount == 0) {
+    return;
+  }
+
   commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
                              pipeline.GetPipeline());
 
@@ -475,12 +549,16 @@ void VulkanRenderer::DrawMesh(vk::CommandBuffer commandBuffer,
                                    pipeline.GetPipelineLayout(), 1, 1,
                                    &m_BindlessDescriptorSet, 0, nullptr);
 
-  commandBuffer.pushConstants(pipeline.GetPipelineLayout(),
-                              vk::ShaderStageFlagBits::eVertex, 0,
-                              sizeof(PushConstantData), &pushData);
+  // Bind mega vertex/index buffers
+  vk::Buffer vertexBuffers[] = {drawSystem.GetVertexBuffer()};
+  vk::DeviceSize offsets[] = {0};
+  commandBuffer.bindVertexBuffers(0, 1, vertexBuffers, offsets);
+  commandBuffer.bindIndexBuffer(drawSystem.GetIndexBuffer(), 0,
+                                vk::IndexType::eUint32);
 
-  mesh.Bind(commandBuffer);
-  mesh.Draw(commandBuffer);
+  // Single indirect draw call for the entire world
+  commandBuffer.drawIndexedIndirect(drawSystem.GetDrawCommandBuffer(), 0,
+                                    drawCount, sizeof(DrawCommand));
 }
 
 } // namespace mc

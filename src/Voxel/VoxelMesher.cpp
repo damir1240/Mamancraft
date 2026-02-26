@@ -80,18 +80,11 @@ VulkanMesh::Builder VoxelMesher::GenerateMesh(const Chunk &chunk) {
             const auto &info = registry.GetInfo(block.type);
             VoxelMesher::FaceData data;
             data.active = true;
-            data.color = info.color;
-            data.animFrames = info.animFrames;
-            if (face == Face::Top)
-              data.texIndex = info.texIndexTop;
-            else if (face == Face::Bottom)
-              data.texIndex = info.texIndexBottom;
-            else
-              data.texIndex = info.texIndexSide;
+            data.materialID = info.materialID;
 
             mask[j * Chunk::SIZE + k] = data;
           } else {
-            mask[j * Chunk::SIZE + k] = {0, 1, {0, 0, 0}, false};
+            mask[j * Chunk::SIZE + k] = {0, false};
           }
         }
       }
@@ -220,14 +213,25 @@ void VoxelMesher::AddGreedyFace(VulkanMesh::Builder &builder,
     uv4 = {0.0f, 0.0f};                  // j=0, k=w
   }
 
-  builder.vertices.push_back(
-      {bp + v1, data.color, uv1, data.texIndex, data.animFrames});
-  builder.vertices.push_back(
-      {bp + v2, data.color, uv2, data.texIndex, data.animFrames});
-  builder.vertices.push_back(
-      {bp + v3, data.color, uv3, data.texIndex, data.animFrames});
-  builder.vertices.push_back(
-      {bp + v4, data.color, uv4, data.texIndex, data.animFrames});
+  // Determine normal index based on axis and direction
+  // Normal index encoding:
+  // 0 = +Y(Top), 1 = -Y(Bottom), 2 = +Z(Front), 3 = -Z(Back), 4 = +X(Right), 5
+  // = -X(Left)
+  uint32_t normalIdx = 0;
+  if (axis == 1) { // Y
+    normalIdx = (direction > 0) ? 0 : 1;
+  } else if (axis == 2) { // Z
+    normalIdx = (direction > 0) ? 2 : 3;
+  } else { // X
+    normalIdx = (direction > 0) ? 4 : 5;
+  }
+
+  uint32_t packedData = Vertex::Pack(data.materialID, normalIdx);
+
+  builder.vertices.push_back({bp + v1, packedData, uv1});
+  builder.vertices.push_back({bp + v2, packedData, uv2});
+  builder.vertices.push_back({bp + v3, packedData, uv3});
+  builder.vertices.push_back({bp + v4, packedData, uv4});
 
   // Winding order: front-face CCW when viewed from outside
   if ((axis == 1 && direction > 0) || (axis == 0 && direction < 0) ||

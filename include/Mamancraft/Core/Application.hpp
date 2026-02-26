@@ -5,6 +5,9 @@
 #include "Mamancraft/Core/TaskSystem.hpp"
 
 #include "Mamancraft/Renderer/Camera.hpp"
+#include "Mamancraft/Renderer/CullingSystem.hpp"
+#include "Mamancraft/Renderer/IndirectDrawSystem.hpp"
+#include "Mamancraft/Renderer/MaterialSystem.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanMesh.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanPipeline.hpp"
 #include "Mamancraft/Renderer/VulkanContext.hpp"
@@ -51,7 +54,13 @@ private:
   // Rendering
   std::unique_ptr<VulkanPipeline> m_Pipeline;
   std::unique_ptr<World> m_World;
-  std::unordered_map<glm::ivec3, AssetHandle> m_ChunkMeshes;
+
+  // GPU-Driven Rendering Systems
+  std::unique_ptr<IndirectDrawSystem> m_IndirectDrawSystem;
+  std::unique_ptr<MaterialSystem> m_MaterialSystem;
+  std::unique_ptr<CullingSystem> m_CullingSystem;
+
+  std::unordered_map<glm::ivec3, uint32_t> m_ChunkDrawIDs; // coords → drawID
 
   // Core (Task system must be destroyed before objects it references in tasks)
   std::unique_ptr<TaskSystem> m_TaskSystem;
