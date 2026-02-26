@@ -1,4 +1,5 @@
 #include "Mamancraft/Renderer/CullingSystem.hpp"
+#include "Mamancraft/Core/FileSystem.hpp"
 #include "Mamancraft/Core/Logger.hpp"
 #include "Mamancraft/Renderer/Vulkan/VulkanShader.hpp"
 #include "Mamancraft/Renderer/VulkanContext.hpp"
@@ -100,10 +101,10 @@ void CullingSystem::CreatePipeline() {
   vk::Device device = m_Context.GetDevice()->GetLogicalDevice();
 
   // Load compute shader
-  const char *basePath = SDL_GetBasePath();
   std::string shaderPath =
-      std::string(basePath ? basePath : "") +
-      "assets/base/assets/mc/shaders/frustum_cull.comp.spv";
+      (FileSystem::GetExecutableDir() / "assets" / "base" / "assets" / "mc" /
+       "shaders" / "frustum_cull.comp.spv")
+          .string();
 
   VulkanShader computeShader(m_Context.GetDevice(), shaderPath);
 
